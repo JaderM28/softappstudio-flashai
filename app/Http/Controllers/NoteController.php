@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Actions\CreateNote;
 use App\Actions\EnsureDefaultDeck;
+use App\Actions\QueueNoteMedia;
 use App\Actions\SyncNoteCards;
+use App\Enums\AssetStatus;
 use App\Http\Requests\StoreNoteRequest;
 use App\Http\Requests\UpdateNoteRequest;
 use App\Models\Deck;
@@ -20,7 +22,26 @@ class NoteController extends Controller
         private readonly CreateNote $createNote,
         private readonly SyncNoteCards $syncCards,
         private readonly EnsureDefaultDeck $ensureDefaultDeck,
+        private readonly QueueNoteMedia $queueMedia,
     ) {}
+
+    /**
+     * Ask again for whatever did not come through. Unsplash runs out of free
+     * requests long before the others, so this is the common case rather than
+     * an edge one.
+     */
+    public function retryMedia(Note $note): RedirectResponse
+    {
+        $this->authorize('update', $note);
+
+        $this->queueMedia->handle(
+            $note,
+            image: $note->image_status !== AssetStatus::Ready,
+            audio: $note->audio_status !== AssetStatus::Ready,
+        );
+
+        return back()->with('status', 'Queued again. It will appear once it comes through.');
+    }
 
     public function index(Request $request): View
     {
@@ -90,11 +111,22 @@ class NoteController extends Controller
         $note->fill($request->safe()->except('deck_id'));
         $note->target_lemma = Note::guessLemma($note->target);
         $note->deck_id = $this->resolveDeck($request)->id;
+
+        // Checked before saving, while the original values are still known.
+        $audioIsStale = $note->isDirty(['sentence', 'target']);
+        $imageIsStale = $note->isDirty('image_query');
+
         $note->save();
 
         // Editing can make a card possible that was not before — fixing a typo
         // so the target finally appears in the sentence, for instance.
         $this->syncCards->handle($note->refresh());
+
+        // Rewording the sentence makes the recording wrong, and a wrong
+        // recording is worse than none.
+        if ($audioIsStale || $imageIsStale) {
+            $this->queueMedia->handle($note, image: $imageIsStale, audio: $audioIsStale);
+        }
 
         return redirect()
             ->route('notes.index')

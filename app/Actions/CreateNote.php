@@ -14,6 +14,7 @@ class CreateNote
 {
     public function __construct(
         private readonly SyncNoteCards $syncCards,
+        private readonly QueueNoteMedia $queueMedia,
     ) {}
 
     /**
@@ -34,6 +35,7 @@ class CreateNote
             $note->save();
 
             $this->syncCards->handle($note);
+            $this->queueMedia->handle($note);
 
             return $note->fresh();
         });

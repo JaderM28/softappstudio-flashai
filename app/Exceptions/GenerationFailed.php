@@ -2,28 +2,15 @@
 
 namespace App\Exceptions;
 
-use RuntimeException;
-
 /**
- * Carries two messages: the technical one for the log, and one worth showing
- * on screen. Without the split the user ends up reading raw API JSON.
+ * Sentence generation could not produce a note.
  *
  * Every user-facing message points back at typing the sentence by hand, since
  * that always works and is the whole reason manual entry was built first.
  */
-class GenerationFailed extends RuntimeException
+class GenerationFailed extends ExternalServiceFailed
 {
     private const FALLBACK = ' You can still write it yourself below.';
-
-    public function __construct(string $message, private readonly string $userMessage = '')
-    {
-        parent::__construct($message);
-    }
-
-    public function userMessage(): string
-    {
-        return $this->userMessage !== '' ? $this->userMessage : $this->getMessage();
-    }
 
     public static function unreachable(string $service, string $detail = ''): self
     {
@@ -35,14 +22,15 @@ class GenerationFailed extends RuntimeException
 
     public static function rejected(string $service, int $status, string $body): self
     {
+        $reason = match ($status) {
+            429 => "{$service}'s free daily limit is used up. Try again tomorrow.",
+            400, 401, 403 => "{$service} rejected the API key. Check GEMINI_API_KEY in your .env.",
+            default => static::reasonFor($service, $status),
+        };
+
         return new self(
             "{$service} refused the request (HTTP {$status}): ".mb_substr($body, 0, 500),
-            match (true) {
-                $status === 429 => "{$service}'s free daily limit is used up. Try again tomorrow.".self::FALLBACK,
-                in_array($status, [400, 401, 403], true) => "{$service} rejected the API key. Check GEMINI_API_KEY in your .env.".self::FALLBACK,
-                $status >= 500 => "{$service} is having trouble right now.".self::FALLBACK,
-                default => "{$service} refused the request.".self::FALLBACK,
-            },
+            $reason.self::FALLBACK,
         );
     }
 

@@ -21,6 +21,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('throttle:20,1')
         ->name('notes.generate');
 
+    Route::post('/notes/{note}/retry-media', [NoteController::class, 'retryMedia'])
+        ->name('notes.retry-media');
+
     Route::resource('notes', NoteController::class)->except('show');
 });
 

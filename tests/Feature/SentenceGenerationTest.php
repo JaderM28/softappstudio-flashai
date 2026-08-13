@@ -29,20 +29,30 @@ class SentenceGenerationTest extends TestCase
         config([
             'services.gemini.key' => 'test-key',
             'services.gemini.base_url' => 'https://generativelanguage.example/v1beta',
-            'services.gemini.model' => 'gemini-2.0-flash',
+            'services.gemini.model' => 'gemini-3.5-flash-lite',
             'services.gemini.cache_ttl' => 0,
         ]);
     }
 
     /**
+     * Shaped like a real Interactions API reply: the answer arrives inside a
+     * `steps` array rather than `candidates`.
+     *
      * @param  array<string, mixed>  $payload
      */
     private function geminiReturns(array $payload): void
     {
         Http::fake([
             '*' => Http::response([
-                'candidates' => [
-                    ['content' => ['parts' => [['text' => json_encode($payload)]]]],
+                'id' => 'v1_test',
+                'model' => 'gemini-3.5-flash-lite',
+                'object' => 'interaction',
+                'status' => 'completed',
+                'steps' => [
+                    [
+                        'type' => 'model_output',
+                        'content' => [['type' => 'text', 'text' => json_encode($payload)]],
+                    ],
                 ],
             ]),
         ]);
@@ -79,13 +89,53 @@ class SentenceGenerationTest extends TestCase
 
             // A schema is a structural guarantee; prompting for "only JSON" is
             // a request the model can decline.
-            $this->assertSame('application/json', $body['generationConfig']['responseMimeType']);
-            $this->assertSame('OBJECT', $body['generationConfig']['responseSchema']['type']);
-            $this->assertContains('target', $body['generationConfig']['responseSchema']['required']);
+            $this->assertSame('application/json', $body['response_format']['mime_type']);
+            $this->assertSame('object', $body['response_format']['schema']['type']);
+            $this->assertContains('target', $body['response_format']['schema']['required']);
+
+            // Interactions API: the model travels in the body, not the URL.
+            $this->assertSame('gemini-3.5-flash-lite', $body['model']);
             $this->assertSame('test-key', $request->header('x-goog-api-key')[0]);
 
-            return str_contains($request->url(), 'gemini-2.0-flash:generateContent');
+            return str_ends_with($request->url(), '/v1beta/interactions');
         });
+    }
+
+    /**
+     * The reply can carry more than one step — the user's own input comes back
+     * as one, and reasoning models add their own — so the answer is picked out
+     * by step type rather than by position.
+     */
+    public function test_the_answer_is_found_among_several_steps(): void
+    {
+        Http::fake([
+            '*' => Http::response([
+                'status' => 'completed',
+                'steps' => [
+                    ['type' => 'user_input', 'content' => [['type' => 'text', 'text' => 'borrow']]],
+                    ['type' => 'model_output', 'content' => [['type' => 'text', 'text' => json_encode($this->samplePayload())]]],
+                ],
+            ]),
+        ]);
+
+        $note = (new GeminiSentenceGenerator)->generate($this->request());
+
+        $this->assertSame('borrowed', $note->target);
+    }
+
+    public function test_a_reply_with_no_model_output_is_reported(): void
+    {
+        Http::fake([
+            '*' => Http::response([
+                'status' => 'failed',
+                'steps' => [['type' => 'user_input', 'content' => [['type' => 'text', 'text' => 'borrow']]]],
+            ]),
+        ]);
+
+        $this->expectException(GenerationFailed::class);
+        $this->expectExceptionMessage('failed');
+
+        (new GeminiSentenceGenerator)->generate($this->request());
     }
 
     public function test_it_maps_the_answer_onto_a_note(): void
@@ -117,7 +167,7 @@ class SentenceGenerationTest extends TestCase
         $instructions = [];
 
         Http::assertSent(function (Request $request) use (&$instructions) {
-            $instructions[] = $request->data()['systemInstruction']['parts'][0]['text'];
+            $instructions[] = $request->data()['system_instruction'];
 
             return true;
         });
@@ -135,7 +185,7 @@ class SentenceGenerationTest extends TestCase
         );
 
         Http::assertSent(fn (Request $request) => str_contains(
-            $request->data()['systemInstruction']['parts'][0]['text'],
+            $request->data()['system_instruction'],
             'medical vocabulary, formal register',
         ));
     }
@@ -151,7 +201,7 @@ class SentenceGenerationTest extends TestCase
         (new GeminiSentenceGenerator)->generate($this->request());
 
         Http::assertSent(function (Request $request) {
-            $prompt = $request->data()['systemInstruction']['parts'][0]['text'];
+            $prompt = $request->data()['system_instruction'];
 
             return str_contains($prompt, 'SCENE')
                 && str_contains($prompt, 'umbrella rain street');
@@ -184,11 +234,12 @@ class SentenceGenerationTest extends TestCase
     public function test_a_blocked_response_is_reported(): void
     {
         Http::fake(['*' => Http::response([
-            'candidates' => [['finishReason' => 'SAFETY']],
+            'status' => 'blocked',
+            'steps' => [],
         ])]);
 
         $this->expectException(GenerationFailed::class);
-        $this->expectExceptionMessage('SAFETY');
+        $this->expectExceptionMessage('blocked');
 
         (new GeminiSentenceGenerator)->generate($this->request());
     }
@@ -196,7 +247,8 @@ class SentenceGenerationTest extends TestCase
     public function test_json_that_does_not_parse_is_reported(): void
     {
         Http::fake(['*' => Http::response([
-            'candidates' => [['content' => ['parts' => [['text' => '{not json']]]]],
+            'status' => 'completed',
+            'steps' => [['type' => 'model_output', 'content' => [['type' => 'text', 'text' => '{not json']]]],
         ])]);
 
         $this->expectException(GenerationFailed::class);

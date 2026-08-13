@@ -46,6 +46,11 @@ return new class extends Migration
             // paperwork, while "umbrella rain street" returns the sentence.
             // Kept so a bad picture can be refetched without another AI call.
             $table->string('image_query')->nullable();
+
+            // The picture is hotlinked from Unsplash's CDN: their guidelines
+            // ask for that, and serving an image does not count against the
+            // rate limit — only searching does. image_path is left for a
+            // future offline mode, which would need a local copy.
             $table->text('image_url')->nullable();
             $table->string('image_path')->nullable();
             $table->json('image_attribution')->nullable();

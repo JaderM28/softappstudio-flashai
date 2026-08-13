@@ -10,6 +10,16 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use JsonException;
 
+/**
+ * Talks to the Gemini Interactions API.
+ *
+ * Not generateContent, which still works but which Google now describes as the
+ * older path — building on the recommended one costs a class today and avoids
+ * a migration later. The differences that matter here: the model goes in the
+ * body rather than the URL, the prompt is `input` rather than a `contents`
+ * array, the schema lives under `response_format`, and the answer comes back
+ * inside a `steps` array rather than `candidates`.
+ */
 class GeminiSentenceGenerator implements SentenceGenerator
 {
     private const SERVICE = 'Gemini';
@@ -22,14 +32,12 @@ class GeminiSentenceGenerator implements SentenceGenerator
             throw GenerationFailed::notConfigured(self::SERVICE);
         }
 
-        $model = config('services.gemini.model');
-
         try {
             $response = Http::withHeaders(['x-goog-api-key' => $key])
                 ->timeout((int) config('services.gemini.timeout'))
                 ->retry(2, 500, throw: false)
                 ->post(
-                    rtrim(config('services.gemini.base_url'), '/')."/models/{$model}:generateContent",
+                    rtrim(config('services.gemini.base_url'), '/').'/interactions',
                     $this->body($request),
                 );
         } catch (ConnectionException $e) {
@@ -49,18 +57,18 @@ class GeminiSentenceGenerator implements SentenceGenerator
     private function body(GenerationRequest $request): array
     {
         return [
-            'systemInstruction' => [
-                'parts' => [['text' => $this->systemInstruction($request)]],
-            ],
-            'contents' => [
-                ['role' => 'user', 'parts' => [['text' => $request->input]]],
-            ],
-            'generationConfig' => [
+            'model' => config('services.gemini.model'),
+            'system_instruction' => $this->systemInstruction($request),
+            'input' => $request->input,
+            'response_format' => [
                 // A schema is a structural guarantee; asking for "only JSON, no
                 // markdown" in the prompt is a request the model can decline,
                 // and it declines often enough to matter.
-                'responseMimeType' => 'application/json',
-                'responseSchema' => $this->schema(),
+                'type' => 'text',
+                'mime_type' => 'application/json',
+                'schema' => $this->schema(),
+            ],
+            'generation_config' => [
                 // Low, but not zero: the sentences should be natural rather
                 // than the same three templates forever.
                 'temperature' => 0.4,
@@ -91,7 +99,7 @@ class GeminiSentenceGenerator implements SentenceGenerator
             '- "target_lemma" is the dictionary form, used only to spot duplicates.',
             "- \"meaning\" is a short gloss in {$target}, not a translation.",
             "- \"translation\" translates the whole sentence into {$native}.",
-            '- "pronunciation" is IPA for the target, or null when it adds nothing.',
+            '- "pronunciation" is IPA for the target, or an empty string when it adds nothing.',
             '- "image_query" is 2 to 5 English words describing the SCENE the sentence pictures, for a '
                 .'stock photo search. Describe what a photo of this moment would show, never the abstract '
                 .'meaning of the word. For "She borrowed my umbrella yesterday" that is "umbrella rain '
@@ -107,27 +115,25 @@ class GeminiSentenceGenerator implements SentenceGenerator
     }
 
     /**
-     * Gemini takes an OpenAPI subset, with uppercase type names.
+     * Standard JSON Schema, with lowercase type names — unlike generateContent,
+     * which took an OpenAPI subset with uppercase ones.
      *
      * @return array<string, mixed>
      */
     private function schema(): array
     {
         return [
-            'type' => 'OBJECT',
+            'type' => 'object',
             'properties' => [
-                'sentence' => ['type' => 'STRING'],
-                'target' => ['type' => 'STRING'],
-                'target_lemma' => ['type' => 'STRING'],
-                'meaning' => ['type' => 'STRING'],
-                'translation' => ['type' => 'STRING'],
-                'pronunciation' => ['type' => 'STRING', 'nullable' => true],
-                'image_query' => ['type' => 'STRING'],
+                'sentence' => ['type' => 'string', 'description' => 'The full sentence to study.'],
+                'target' => ['type' => 'string', 'description' => 'The word or phrase being learned, exactly as it appears in the sentence.'],
+                'target_lemma' => ['type' => 'string', 'description' => 'Dictionary form of the target.'],
+                'meaning' => ['type' => 'string', 'description' => 'Short gloss in the target language.'],
+                'translation' => ['type' => 'string', 'description' => 'The sentence translated into the native language.'],
+                'pronunciation' => ['type' => 'string', 'description' => 'IPA for the target, or empty.'],
+                'image_query' => ['type' => 'string', 'description' => 'Two to five English words describing the scene, for a stock photo search.'],
             ],
             'required' => ['sentence', 'target', 'target_lemma', 'meaning', 'translation', 'image_query'],
-            'propertyOrdering' => [
-                'sentence', 'target', 'target_lemma', 'meaning', 'translation', 'pronunciation', 'image_query',
-            ],
         ];
     }
 
@@ -136,14 +142,12 @@ class GeminiSentenceGenerator implements SentenceGenerator
      */
     private function parse(?array $payload): GeneratedNote
     {
-        $text = data_get($payload, 'candidates.0.content.parts.0.text');
+        $text = $this->extractText($payload);
 
-        if (! is_string($text) || trim($text) === '') {
-            $reason = data_get($payload, 'candidates.0.finishReason')
-                ?? data_get($payload, 'promptFeedback.blockReason')
-                ?? 'no content in the response';
+        if ($text === null) {
+            $status = data_get($payload, 'status') ?? 'no text in the response';
 
-            throw GenerationFailed::unusableAnswer(self::SERVICE, (string) $reason);
+            throw GenerationFailed::unusableAnswer(self::SERVICE, (string) $status);
         }
 
         try {
@@ -164,5 +168,39 @@ class GeminiSentenceGenerator implements SentenceGenerator
         }
 
         return $note;
+    }
+
+    /**
+     * The answer sits in a `steps` array, which can hold more than the reply —
+     * the user's own input comes back as a step too, and reasoning models add
+     * their own. So the model_output steps are picked out by name rather than
+     * by position.
+     *
+     * @param  array<string, mixed>|null  $payload
+     */
+    private function extractText(?array $payload): ?string
+    {
+        // The SDKs surface this convenience field; take it when it is there.
+        $direct = data_get($payload, 'output_text');
+
+        if (is_string($direct) && trim($direct) !== '') {
+            return $direct;
+        }
+
+        $collected = '';
+
+        foreach ((array) data_get($payload, 'steps', []) as $step) {
+            if (data_get($step, 'type') !== 'model_output') {
+                continue;
+            }
+
+            foreach ((array) data_get($step, 'content', []) as $part) {
+                if (data_get($part, 'type') === 'text' && is_string(data_get($part, 'text'))) {
+                    $collected .= data_get($part, 'text');
+                }
+            }
+        }
+
+        return trim($collected) === '' ? null : $collected;
     }
 }

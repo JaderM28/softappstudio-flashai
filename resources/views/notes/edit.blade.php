@@ -28,6 +28,50 @@
                 </div>
             </form>
 
+            <div class="bg-white dark:bg-gray-800 shadow-xs sm:rounded-lg p-6 space-y-4">
+                <p class="text-sm uppercase tracking-widest text-gray-500 dark:text-gray-400">
+                    {{ __('Picture and audio') }}
+                </p>
+
+                @if ($note->imageSrc())
+                    <img src="{{ $note->imageSrc() }}" alt=""
+                         class="w-full h-40 object-cover rounded-md bg-gray-100 dark:bg-gray-900">
+                    @if ($note->image_attribution)
+                        <p class="text-xs text-gray-400 dark:text-gray-500">
+                            {{ __('Photo by') }}
+                            <a href="{{ $note->image_attribution['profile_url'] ?? '#' }}"
+                               target="_blank" rel="noopener noreferrer" class="underline">
+                                {{ $note->image_attribution['photographer'] ?? __('Unknown') }}
+                            </a>
+                            {{ __('on Unsplash') }}
+                        </p>
+                    @endif
+                @endif
+
+                @if ($note->audioSentenceSrc())
+                    <audio controls preload="none" src="{{ $note->audioSentenceSrc() }}" class="w-full"></audio>
+                @endif
+
+                @if ($note->image_status !== \App\Enums\AssetStatus::Ready || $note->audio_status !== \App\Enums\AssetStatus::Ready)
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div class="space-y-1">
+                            <x-asset-status :note="$note" />
+                            @foreach ($note->generation_errors ?? [] as $asset => $message)
+                                <p class="text-xs text-amber-600 dark:text-amber-500">{{ $message }}</p>
+                            @endforeach
+                        </div>
+
+                        <form method="POST" action="{{ route('notes.retry-media', $note) }}">
+                            @csrf
+                            <button type="submit"
+                                    class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+                                {{ __('Try again') }}
+                            </button>
+                        </form>
+                    </div>
+                @endif
+            </div>
+
             <div class="bg-white dark:bg-gray-800 shadow-xs sm:rounded-lg p-6">
                 <p class="text-sm uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-3">
                     {{ __('Cards from this sentence') }}

@@ -634,7 +634,7 @@
             <tr><td><code>meaning</code></td><td>Short gloss, in English or Spanish depending on the deck</td></tr>
             <tr><td><code>translation</code></td><td>Full-sentence translation. Optional, and shown only after you answer.</td></tr>
             <tr><td><code>pronunciation</code></td><td>IPA or a plain-language note</td></tr>
-            <tr><td><code>image_path</code> <code>image_query</code> <code>image_attribution</code></td><td>Cached locally; the query is kept so a bad image can be re-fetched without another AI call</td></tr>
+            <tr><td><code>image_url</code> <code>image_query</code> <code>image_attribution</code></td><td>Hotlinked from Unsplash's CDN, which their guidelines ask for and which does not count against the rate limit; the query is kept so a bad picture can be refetched without another AI call</td></tr>
             <tr><td><code>audio_sentence_path</code> <code>audio_target_path</code></td><td>Generated once, never per review</td></tr>
             <tr><td><code>source</code></td><td>Where you found it — series, book, manual. Makes review sessions feel like your own material.</td></tr>
             <tr><td><code>content_status</code> <code>image_status</code> <code>audio_status</code></td><td>Per-asset, not one global flag — see below</td></tr>
@@ -790,11 +790,16 @@ stateDiagram-v2
       </div>
 
       <h4>Talking to Gemini properly</h4>
-      <p>The draft's prompt ended with <em>"only JSON, no markdown"</em>. That is a request, and models decline it often enough to matter. Gemini takes a <code>responseSchema</code> and will then return schema-valid JSON as a structural guarantee. Use it — it removes a whole class of parse failures.</p>
+      <p>The draft's prompt ended with <em>"only JSON, no markdown"</em>. That is a request, and models decline it often enough to matter. The Interactions API takes a <code>response_format</code> with a JSON Schema and then returns schema-valid JSON as a structural guarantee. Use it — it removes a whole class of parse failures.</p>
+
+      <div class="flag">
+        <span class="tag">Checked in August 2026, not assumed</span>
+        <p>The draft named <code>gemini-2.0-flash</code>, which has since been shut down. The current line runs from <code>gemini-3.6-flash</code> down to <code>gemini-3.5-flash-lite</code>, which is what this uses — filling in six fields about one sentence asks nothing more of a model. <code>generateContent</code> still works but Google now points new work at <code>/v1beta/interactions</code>, where the model travels in the body and the answer arrives in a <code>steps</code> array. Model names and endpoints move; check them before writing the client, not after.</p>
+      </div>
 
       <h4>Limits and reuse</h4>
       <ul>
-        <li>Gemini 1,500/day and TTS 1M chars/month are generous for one person. <strong>Unsplash's 50 per hour is the real ceiling</strong> — image jobs get a rate-limited queue, and a note waits for its picture rather than failing.</li>
+        <li>Google TTS gives 4M characters a month on standard voices, which one person will not approach. <strong>Unsplash's 50 searches an hour is the real ceiling</strong> — image jobs get a rate-limited queue, and a note waits for its picture rather than failing. Serving the picture itself is free of that limit, which is the other reason to hotlink it.</li>
         <li>Generation results are cached by input hash, so re-adding a word you already looked up costs nothing.</li>
         <li>Every external call is behind an interface with a fake, so tests never touch the network.</li>
       </ul>
