@@ -1,0 +1,889 @@
+<title>Sentence Mining Blueprint</title>
+
+<style>
+  :root {
+    --ground:      #F4F5F7;
+    --surface:     #FFFFFF;
+    --surface-alt: #EDEFF3;
+    --ink:         #10151E;
+    --ink-soft:    #333B4A;
+    --muted:       #5B6577;
+    --rule:        #DCE1E9;
+    --rule-strong: #C2CAD6;
+    --accent:      #1B4D8F;
+    --accent-soft: #E6EEF8;
+
+    --again: #A81F26;
+    --hard:  #8F5411;
+    --good-solid: #146243;
+    --easy:  #1B4D8F;
+
+    --font-display: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --font-body: Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+    --measure: 68ch;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #0D1117;
+      --surface:     #151A22;
+      --surface-alt: #1B222C;
+      --ink:         #E3E8F0;
+      --ink-soft:    #C3CBD8;
+      --muted:       #8D97A8;
+      --rule:        #262E3A;
+      --rule-strong: #38424F;
+      --accent:      #82B4EE;
+      --accent-soft: #15263B;
+
+      --again: #EE8A85;
+      --hard:  #DFA75A;
+      --good-solid: #5FC79A;
+      --easy:  #82B4EE;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #0D1117;
+    --surface:     #151A22;
+    --surface-alt: #1B222C;
+    --ink:         #E3E8F0;
+    --ink-soft:    #C3CBD8;
+    --muted:       #8D97A8;
+    --rule:        #262E3A;
+    --rule-strong: #38424F;
+    --accent:      #82B4EE;
+    --accent-soft: #15263B;
+
+    --again: #EE8A85;
+    --hard:  #DFA75A;
+    --good-solid: #5FC79A;
+    --easy:  #82B4EE;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 24px 120px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0 56px;
+  }
+
+  @media (min-width: 1040px) {
+    .page { grid-template-columns: 210px minmax(0, 1fr); }
+    .masthead { grid-column: 1 / -1; }
+  }
+
+  /* ---- masthead ---- */
+
+  .masthead {
+    padding: 76px 0 40px;
+    border-bottom: 1px solid var(--rule-strong);
+    margin-bottom: 48px;
+  }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 20px;
+  }
+
+  .masthead h1 {
+    font-family: var(--font-display);
+    font-size: clamp(38px, 6vw, 62px);
+    line-height: 1.02;
+    letter-spacing: -0.033em;
+    font-weight: 700;
+    margin: 0 0 22px;
+    text-wrap: balance;
+    max-width: 16ch;
+  }
+
+  .standfirst {
+    font-size: 20px;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    max-width: 60ch;
+    margin: 0;
+  }
+
+  .standfirst strong { color: var(--ink); font-weight: 400; box-shadow: inset 0 -0.5em 0 var(--accent-soft); }
+
+  /* ---- contents rail ---- */
+
+  .rail { display: none; }
+
+  @media (min-width: 1040px) {
+    .rail {
+      display: block;
+      position: sticky;
+      top: 40px;
+      align-self: start;
+      font-family: var(--font-display);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .rail ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 11px; }
+    .rail a {
+      color: var(--muted);
+      text-decoration: none;
+      display: flex;
+      gap: 9px;
+      border-left: 2px solid transparent;
+      padding-left: 11px;
+      margin-left: -13px;
+    }
+    .rail a:hover { color: var(--accent); border-left-color: var(--accent); }
+    .rail a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    .rail .n { font-family: var(--font-mono); font-size: 11px; padding-top: 2px; opacity: 0.75; font-variant-numeric: tabular-nums; }
+  }
+
+  /* ---- sections ---- */
+
+  main { min-width: 0; max-width: var(--measure); }
+
+  section { margin-bottom: 68px; scroll-margin-top: 28px; }
+
+  h2 {
+    font-family: var(--font-display);
+    font-size: 15px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 650;
+    color: var(--accent);
+    margin: 0 0 8px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  h2 .n {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  h3 {
+    font-family: var(--font-display);
+    font-size: 27px;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    font-weight: 680;
+    margin: 0 0 20px;
+    text-wrap: balance;
+  }
+
+  h4 {
+    font-family: var(--font-display);
+    font-size: 16px;
+    letter-spacing: -0.005em;
+    font-weight: 650;
+    margin: 34px 0 10px;
+  }
+
+  p { margin: 0 0 17px; }
+
+  a { color: var(--accent); }
+
+  strong { font-weight: 700; }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.845em;
+    background: var(--surface-alt);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 0.1em 0.36em;
+  }
+
+  ul, ol { margin: 0 0 17px; padding-left: 22px; }
+  li { margin-bottom: 8px; }
+  li::marker { color: var(--muted); }
+
+  /* ---- devices ---- */
+
+  .lede {
+    font-size: 19px;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    margin-bottom: 24px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: 24px 26px;
+    margin: 0 0 24px;
+  }
+
+  .panel > :last-child { margin-bottom: 0; }
+
+  .flag {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 18px 22px;
+    margin: 0 0 24px;
+    border-radius: 0 4px 4px 0;
+  }
+  .flag > :last-child { margin-bottom: 0; }
+  .flag .tag {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 7px;
+  }
+
+  .scroller { overflow-x: auto; margin: 0 0 24px; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-family: var(--font-display);
+    font-size: 14.5px;
+    line-height: 1.45;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 11px 16px 11px 0;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+
+  th {
+    font-size: 11.5px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    border-bottom-color: var(--rule-strong);
+    white-space: nowrap;
+  }
+
+  td code { font-size: 12.5px; white-space: nowrap; }
+
+  .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* ---- card specimen ---- */
+
+  .specimens {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: 1fr;
+    margin: 0 0 26px;
+  }
+  @media (min-width: 720px) { .specimens { grid-template-columns: 1fr 1fr; } }
+
+  .specimen {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .specimen-head {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 9px 16px;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    background: var(--surface-alt);
+  }
+
+  .specimen-body { padding: 18px 16px; flex: 1; }
+
+  .specimen-scene {
+    background: var(--surface-alt);
+    border: 1px dashed var(--rule-strong);
+    border-radius: 4px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    padding: 20px 12px;
+    text-align: center;
+    margin-bottom: 14px;
+  }
+
+  .specimen-prompt {
+    font-family: var(--font-display);
+    font-size: 18px;
+    line-height: 1.4;
+    margin: 0 0 10px;
+  }
+
+  .blank {
+    display: inline-block;
+    min-width: 4.5em;
+    border-bottom: 2px solid var(--accent);
+    color: transparent;
+  }
+
+  .specimen-note {
+    font-family: var(--font-display);
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  /* ---- ladder ---- */
+
+  .ladder {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    padding: 26px 0 0;
+    margin: 0 0 10px;
+    min-width: 520px;
+  }
+
+  .rung { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+
+  .rung .bar {
+    width: 100%;
+    background: var(--accent);
+    border-radius: 2px 2px 0 0;
+    opacity: 0.82;
+  }
+
+  .rung.intraday .bar { background: var(--muted); opacity: 0.5; }
+
+  .rung .lab {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ladder-axis {
+    border-top: 1px solid var(--rule-strong);
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding-top: 8px;
+    min-width: 520px;
+  }
+
+  /* ---- grade key ---- */
+
+  .grades { display: flex; flex-direction: column; gap: 0; margin: 0 0 24px; }
+
+  .grade {
+    display: grid;
+    grid-template-columns: 88px 1fr;
+    gap: 18px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--rule);
+    align-items: baseline;
+  }
+  .grade:first-child { border-top: 1px solid var(--rule-strong); }
+
+  .grade-name {
+    font-family: var(--font-display);
+    font-weight: 680;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+
+  .grade-body { font-size: 15px; font-family: var(--font-display); line-height: 1.5; color: var(--ink-soft); }
+  .grade-body .eff { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); display: block; margin-top: 3px; }
+
+  /* ---- mermaid ---- */
+
+  .mermaid {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: 22px 18px;
+    margin: 0 0 24px;
+    overflow-x: auto;
+    text-align: center;
+  }
+
+  /* ---- verdict list ---- */
+
+  .verdicts { list-style: none; padding: 0; margin: 0 0 24px; }
+  .verdicts li {
+    display: grid;
+    grid-template-columns: 82px 1fr;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--rule);
+    align-items: baseline;
+    font-family: var(--font-display);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .verdicts li:first-child { border-top: 1px solid var(--rule-strong); }
+  .verdicts .v {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    padding-top: 3px;
+  }
+  .v-keep { color: var(--good-solid); }
+  .v-change { color: var(--hard); }
+  .v-drop { color: var(--again); }
+
+  /* ---- steps ---- */
+
+  .steps { list-style: none; padding: 0; margin: 0; counter-reset: step; }
+
+  .steps li {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    gap: 16px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .steps li:first-child { border-top: 1px solid var(--rule-strong); }
+
+  .steps li::before {
+    content: counter(step, decimal-leading-zero);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    padding-top: 4px;
+  }
+
+  .steps h4 { margin: 0 0 4px; font-size: 16px; }
+  .steps p { margin: 0; font-size: 15px; font-family: var(--font-display); color: var(--ink-soft); line-height: 1.5; }
+
+  footer {
+    border-top: 1px solid var(--rule-strong);
+    padding-top: 22px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    max-width: var(--measure);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">FlashAI · Revised project plan</p>
+    <h1>Learning a language one sentence at a time</h1>
+    <p class="standfirst">The first draft built flashcards around <strong>words</strong>. This one builds them around <strong>sentences and images</strong>, which is both what you asked for and what actually teaches a language. Here is the design that follows from that, and everything it changes.</p>
+  </header>
+
+  <nav class="rail" aria-label="Contents">
+    <ol>
+      <li><a href="#method"><span class="n">01</span><span>The method</span></a></li>
+      <li><a href="#cards"><span class="n">02</span><span>One sentence, three questions</span></a></li>
+      <li><a href="#model"><span class="n">03</span><span>Data model</span></a></li>
+      <li><a href="#scheduler"><span class="n">04</span><span>The scheduler</span></a></li>
+      <li><a href="#session"><span class="n">05</span><span>Session rules</span></a></li>
+      <li><a href="#generation"><span class="n">06</span><span>Generation pipeline</span></a></li>
+      <li><a href="#screens"><span class="n">07</span><span>Screens</span></a></li>
+      <li><a href="#built"><span class="n">08</span><span>What already exists</span></a></li>
+      <li><a href="#order"><span class="n">09</span><span>Build order</span></a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <section id="method">
+      <h2><span class="n">01</span> The method</h2>
+      <h3>A word on its own has nothing to hold on to</h3>
+
+      <p class="lede">Every design decision below comes out of one choice: the unit you study is a <em>sentence</em>, and its meaning is carried by an <em>image</em> rather than a translation.</p>
+
+      <p><code>borrow → pedir prestado</code> is a fact about two dictionaries. It tells you nothing about how the word behaves. Is it <em>borrow from</em> or <em>borrow to</em>? Does it work for money, for time, for ideas? What tense do people actually say it in?</p>
+
+      <p><em>"She borrowed my umbrella yesterday"</em> answers all of that at once, and gives your memory a scene to attach to instead of an abstraction. That is the whole argument for sentences.</p>
+
+      <h4>Why the image matters more than it looks</h4>
+
+      <p>When the back of a card says <em>pedir prestado</em>, you are not learning English. You are learning a lookup table from English to Spanish, and every time you use the word in real life you pay the cost of that translation step. Show a picture of someone handing over an umbrella in the rain and the English form attaches straight to the meaning, with no Spanish in the middle.</p>
+
+      <p>That is the single reason this app is worth building rather than using a word list: <strong>the image is the definition</strong>. Translation becomes an optional hint, not the answer.</p>
+
+      <div class="flag">
+        <span class="tag">The one rule that governs the rest</span>
+        <p>Each sentence should contain exactly one thing you do not already know. A sentence with three unknown words is not a flashcard, it is a reading assignment — you will fail it for reasons you cannot diagnose, and the scheduler will keep showing it to you forever.</p>
+      </div>
+
+      <h4>Two ways material gets in</h4>
+
+      <p>Both are worth supporting, and they cost almost the same to build because they hit the same pipeline:</p>
+
+      <ul>
+        <li><strong>You type a word.</strong> The AI writes a natural sentence around it at your level. Convenient, and it is what the original plan described.</li>
+        <li><strong>You paste a sentence you actually met</strong> — in a series, a book, a conversation. The AI works out which part is the thing you are learning. This is the better habit: material you have already encountered once is material you have a reason to remember.</li>
+      </ul>
+    </section>
+
+    <section id="cards">
+      <h2><span class="n">02</span> One sentence, three questions</h2>
+      <h3>The sentence is stored once; the questions are generated from it</h3>
+
+      <p>This is the structural point that was hard to explain in chat, so here it is concretely. You add one sentence. It is stored one time, with its image and its audio. From it the app generates separate questions, and <strong>each question carries its own schedule</strong>.</p>
+
+      <div class="panel">
+        <p style="font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px;">What you store</p>
+        <p style="font-family: var(--font-display); font-size: 19px; margin-bottom: 6px;">She <strong>borrowed</strong> my umbrella yesterday.</p>
+        <p class="specimen-note">target <code>borrowed</code> · image: someone handing over an umbrella in the rain · audio: full sentence + the word alone</p>
+      </div>
+
+      <div class="specimens">
+        <div class="specimen">
+          <div class="specimen-head">Cloze — the core card</div>
+          <div class="specimen-body">
+            <div class="specimen-scene">☂ image of the scene</div>
+            <p class="specimen-prompt">She <span class="blank">borrowed</span> my umbrella yesterday.</p>
+            <p class="specimen-note">Audio plays. You produce the missing word.</p>
+          </div>
+        </div>
+        <div class="specimen">
+          <div class="specimen-head">Listening</div>
+          <div class="specimen-body">
+            <div class="specimen-scene">▶ audio only, no text</div>
+            <p class="specimen-prompt">What did you hear?</p>
+            <p class="specimen-note">Reveals the sentence and the image. Trains the ear, which reading never does.</p>
+          </div>
+        </div>
+      </div>
+
+      <p>A third type, <strong>production</strong> — image plus a hint, and you say the whole sentence — is the hardest and the most valuable. It is worth adding, but not on day one: it is the one that makes sessions long.</p>
+
+      <h4>Why they must be scheduled separately</h4>
+
+      <p>Because they are different skills and you will not master them at the same time. You will recognise the sentence long before you can produce the word in it, and you will be able to read it long before you can hear it at speed. One shared interval means the easiest skill sets the pace and the other two never get practised.</p>
+
+      <h4>Why the sentence is stored once</h4>
+
+      <p>Because otherwise the image, the audio and the text exist in two or three copies, and the first time you fix a typo you fix it in one of them. They drift, and the drift is silent.</p>
+
+      <div class="flag">
+        <span class="tag">Recommendation</span>
+        <p>Start generating <strong>cloze and listening</strong> for every sentence. Add production once you have a few weeks of data and know what your daily load actually looks like. Turning it on later costs one enum value and a backfill command — no migration.</p>
+      </div>
+    </section>
+
+    <section id="model">
+      <h2><span class="n">03</span> Data model</h2>
+      <h3>Notes hold content; cards hold questions and schedule</h3>
+
+      <div class="scroller">
+        <table>
+          <thead>
+            <tr><th>Table</th><th>Holds</th><th>Rows per sentence</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>decks</code></td><td>Grouping, plus per-deck generation settings and daily limits</td><td class="num">—</td></tr>
+            <tr><td><code>notes</code></td><td>The sentence, the target word, meaning, image, audio</td><td class="num">1</td></tr>
+            <tr><td><code>cards</code></td><td>One question type + its full scheduling state</td><td class="num">2–3</td></tr>
+            <tr><td><code>card_reviews</code></td><td>Append-only log of every grade</td><td class="num">many</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>notes</h4>
+      <div class="scroller">
+        <table>
+          <thead><tr><th>Column</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><code>sentence</code></td><td>The full sentence, as studied</td></tr>
+            <tr><td><code>target</code></td><td>The word or chunk being learned, as it appears in the sentence</td></tr>
+            <tr><td><code>target_lemma</code></td><td>Dictionary form. Lets the app warn you that you already have a card for <em>borrow</em> when you add <em>borrowed</em>.</td></tr>
+            <tr><td><code>meaning</code></td><td>Short gloss, in English or Spanish depending on the deck</td></tr>
+            <tr><td><code>translation</code></td><td>Full-sentence translation. Optional, and shown only after you answer.</td></tr>
+            <tr><td><code>pronunciation</code></td><td>IPA or a plain-language note</td></tr>
+            <tr><td><code>image_path</code> <code>image_query</code> <code>image_attribution</code></td><td>Cached locally; the query is kept so a bad image can be re-fetched without another AI call</td></tr>
+            <tr><td><code>audio_sentence_path</code> <code>audio_target_path</code></td><td>Generated once, never per review</td></tr>
+            <tr><td><code>source</code></td><td>Where you found it — series, book, manual. Makes review sessions feel like your own material.</td></tr>
+            <tr><td><code>content_status</code> <code>image_status</code> <code>audio_status</code></td><td>Per-asset, not one global flag — see below</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flag">
+        <span class="tag">Why three status columns instead of one</span>
+        <p>Three external services are involved and they fail independently. Unsplash rate-limits far sooner than the others. A note with text and audio but no image is perfectly studiable; a single global status forces you to treat it as broken, and one flaky API takes the whole note down with it.</p>
+      </div>
+
+      <h4>cards</h4>
+      <p>Thin, and carrying the schedule directly rather than in a separate table — the due query runs on every session and there is no reason to make it join.</p>
+      <div class="scroller">
+        <table>
+          <thead><tr><th>Column</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><code>note_id</code> <code>type</code></td><td>Unique together — one cloze card per note, one listening card per note</td></tr>
+            <tr><td><code>queue</code></td><td><code>new</code> · <code>learning</code> · <code>review</code> · <code>relearning</code> · <code>suspended</code></td></tr>
+            <tr><td><code>learning_step</code></td><td>Index into the learning steps array; null once graduated</td></tr>
+            <tr><td><code>repetitions</code> <code>easiness</code> <code>interval_days</code> <code>next_review_at</code></td><td>SM-2 state</td></tr>
+            <tr><td><code>lapses</code></td><td>Times failed after graduating. Drives leech detection.</td></tr>
+            <tr><td><code>buried_until</code></td><td>Set when a sibling card of the same note was answered today</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Index on <code>(user_id, queue, next_review_at)</code> — that is the query that builds every session.</p>
+    </section>
+
+    <section id="scheduler">
+      <h2><span class="n">04</span> The scheduler</h2>
+      <h3>SM-2 with learning steps, which is what Anki actually runs</h3>
+
+      <p>Plain SM-2 has a real gap: a brand new card jumps straight to a one-day interval. You see a sentence once, get it right by luck, and do not see it again until tomorrow — by which time it is gone. Anki fixes this with short <strong>learning steps</strong> inside the same session.</p>
+
+      <div class="scroller">
+        <div class="ladder">
+          <div class="rung intraday"><div class="bar" style="height: 8px;"></div><span class="lab">1m</span></div>
+          <div class="rung intraday"><div class="bar" style="height: 14px;"></div><span class="lab">10m</span></div>
+          <div class="rung"><div class="bar" style="height: 24px;"></div><span class="lab">1d</span></div>
+          <div class="rung"><div class="bar" style="height: 38px;"></div><span class="lab">3d</span></div>
+          <div class="rung"><div class="bar" style="height: 56px;"></div><span class="lab">8d</span></div>
+          <div class="rung"><div class="bar" style="height: 78px;"></div><span class="lab">20d</span></div>
+          <div class="rung"><div class="bar" style="height: 104px;"></div><span class="lab">50d</span></div>
+          <div class="rung"><div class="bar" style="height: 134px;"></div><span class="lab">4mo</span></div>
+        </div>
+        <div class="ladder-axis"><span>Same session</span><span>Graduated — interval × easiness each time</span></div>
+      </div>
+
+      <p>The first two rungs happen minutes apart while you are still sitting there. Only after those does the card graduate into the day-scale ladder.</p>
+
+      <h4>Four buttons, not three</h4>
+
+      <p>The draft had Easy / Hard / Wrong. Anki uses four, and the fourth earns its place: on a card you got right, <em>Hard</em> and <em>Good</em> need to mean different things, otherwise every successful recall stretches the interval by the same multiplier regardless of how much it cost you.</p>
+
+      <div class="grades">
+        <div class="grade">
+          <div class="grade-name"><span class="swatch" style="background: var(--again);"></span>Again</div>
+          <div class="grade-body">Failed. Back to relearning steps, and the card is marked as a lapse.<span class="eff">easiness − 0.20 · interval resets</span></div>
+        </div>
+        <div class="grade">
+          <div class="grade-name"><span class="swatch" style="background: var(--hard);"></span>Hard</div>
+          <div class="grade-body">Recalled, but it hurt. Interval grows slowly.<span class="eff">easiness − 0.15 · interval × 1.2</span></div>
+        </div>
+        <div class="grade">
+          <div class="grade-name"><span class="swatch" style="background: var(--good-solid);"></span>Good</div>
+          <div class="grade-body">The normal answer. This is the button you press most.<span class="eff">easiness unchanged · interval × easiness</span></div>
+        </div>
+        <div class="grade">
+          <div class="grade-name"><span class="swatch" style="background: var(--easy);"></span>Easy</div>
+          <div class="grade-body">Instant, no hesitation. Pushes the card far out.<span class="eff">easiness + 0.15 · interval × easiness × 1.3</span></div>
+        </div>
+      </div>
+
+      <p>These fixed adjustments are Anki's variant of SM-2 rather than the original 1987 formula. With four buttons instead of a 0–5 self-rating they behave better, and they are what a decade of real use has tuned.</p>
+
+      <h4>Card lifecycle</h4>
+
+      <pre class="mermaid">
+stateDiagram-v2
+    direction LR
+    [*] --> New
+    New --> Learning: Again · Hard · Good
+    Learning --> Learning: Again → step 0
+    Learning --> Review: Good on last step (1d)
+    New --> Review: Easy (4d)
+    Learning --> Review: Easy (4d)
+    Review --> Review: Hard · Good · Easy
+    Review --> Relearning: Again
+    Relearning --> Relearning: Again
+    Relearning --> Review: Good on last step
+    Relearning --> Suspended: 8th lapse — leech
+      </pre>
+
+      <h4>The details that stop it going wrong</h4>
+      <ul>
+        <li><strong>Fuzz.</strong> Every interval is jittered ±5%. Without it, everything added on the same day comes due on the same day, forever, and your load arrives in spikes.</li>
+        <li><strong>Maximum interval.</strong> Cap at a year. Beyond that the scheduling is guesswork and you would rather see the card.</li>
+        <li><strong>Leeches.</strong> A card failed 8 times is not being learned — the sentence is bad or has more than one unknown in it. Suspend it and tell the user, instead of grinding on it daily.</li>
+        <li><strong>Day boundary.</strong> Cards fall due at the start of a review day with a 4am rollover, not N×24h after the last review. Already built and tested.</li>
+      </ul>
+
+      <p>All of it lives in <code>config/flashai.php</code> — steps, multipliers, caps, leech threshold — so tuning does not mean editing the algorithm.</p>
+    </section>
+
+    <section id="session">
+      <h2><span class="n">05</span> Session rules</h2>
+      <h3>The part that decides whether you keep using it</h3>
+
+      <div class="flag">
+        <span class="tag">Read this one before setting any limits</span>
+        <p>A new card generates roughly <strong>10 reviews over its first months</strong>. At two cards per sentence, adding 10 sentences a day settles at around <strong>200 reviews a day</strong> — well over half an hour, every day, forever. This is how people quit. Start at <strong>5 new sentences a day</strong> and raise it only once you have lived with the load.</p>
+      </div>
+
+      <p>So the app enforces limits rather than offering them:</p>
+
+      <ul>
+        <li><strong>New per day</strong>, per deck. Default 5 sentences. The cap is on sentences, not cards, because sentences are what you think in.</li>
+        <li><strong>Reviews per day.</strong> A ceiling so a holiday backlog does not present you with 600 cards and no way in.</li>
+        <li><strong>Sibling burying.</strong> Answer the cloze for a sentence and its listening card moves to tomorrow. Otherwise the second one is free — you just read the answer.</li>
+        <li><strong>Order within a session:</strong> learning cards that are due now first, since they are time-sensitive, then reviews, then new cards. Never new cards first — that front-loads the hardest work.</li>
+        <li><strong>Undo.</strong> A mis-tap on <em>Easy</em> pushes a card out by weeks. The review log makes undo a matter of reverting one row.</li>
+      </ul>
+    </section>
+
+    <section id="generation">
+      <h2><span class="n">06</span> Generation pipeline</h2>
+      <h3>Three services, each allowed to fail on its own</h3>
+
+      <ol class="steps">
+        <li>
+          <h4>Gemini writes the note</h4>
+          <p>Given a word or a pasted sentence, it returns the sentence, the target and its lemma, a gloss, IPA, an optional translation — and an <code>image_query</code>.</p>
+        </li>
+        <li>
+          <h4>Unsplash fetches the image</h4>
+          <p>Searched on the AI's <code>image_query</code>, never on the word itself.</p>
+        </li>
+        <li>
+          <h4>Google TTS records the audio</h4>
+          <p>Full sentence and target word, generated once and stored, never per review.</p>
+        </li>
+        <li>
+          <h4>You approve before it is saved</h4>
+          <p>The generated note is shown for editing first. AI sentences are usually good and occasionally strange, and a bad sentence poisons months of reviews.</p>
+        </li>
+      </ol>
+
+      <div class="flag">
+        <span class="tag">The detail that makes or breaks the images</span>
+        <p>Searching Unsplash for <code>borrowed</code> returns stock photos of handshakes and loan paperwork. Searching for <code>umbrella rain street</code> returns the scene in the sentence. That is why Gemini is asked for a search query describing the <em>scene</em> — a picture that illustrates the sentence is worth having, one that vaguely gestures at the word is worse than none.</p>
+      </div>
+
+      <h4>Talking to Gemini properly</h4>
+      <p>The draft's prompt ended with <em>"only JSON, no markdown"</em>. That is a request, and models decline it often enough to matter. Gemini takes a <code>responseSchema</code> and will then return schema-valid JSON as a structural guarantee. Use it — it removes a whole class of parse failures.</p>
+
+      <h4>Limits and reuse</h4>
+      <ul>
+        <li>Gemini 1,500/day and TTS 1M chars/month are generous for one person. <strong>Unsplash's 50 per hour is the real ceiling</strong> — image jobs get a rate-limited queue, and a note waits for its picture rather than failing.</li>
+        <li>Generation results are cached by input hash, so re-adding a word you already looked up costs nothing.</li>
+        <li>Every external call is behind an interface with a fake, so tests never touch the network.</li>
+      </ul>
+    </section>
+
+    <section id="screens">
+      <h2><span class="n">07</span> Screens</h2>
+      <h3>Five, mobile first</h3>
+
+      <div class="scroller">
+        <table>
+          <thead><tr><th>Screen</th><th>Job</th></tr></thead>
+          <tbody>
+            <tr><td>Home</td><td>Cards due today as one big number, a start button, streak, and how many new sentences are left in today's allowance</td></tr>
+            <tr><td>Add</td><td>One big input that takes a word or a pasted sentence. Generated note shown for editing, with the image and audio previewed, before it is saved.</td></tr>
+            <tr><td>Review</td><td>Image, prompt, audio autoplay, reveal, four buttons. Undo in the corner. Nothing else on screen.</td></tr>
+            <tr><td>Browse</td><td>Sentences with search, filter by state, edit, suspend, delete. Leeches surfaced here.</td></tr>
+            <tr><td>Stats</td><td>Activity heatmap, upcoming load forecast, true retention, cards by state</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The forecast on the stats screen matters more than it sounds: it is the thing that tells you your daily new limit is too high, three weeks before the load actually lands on you.</p>
+    </section>
+
+    <section id="built">
+      <h2><span class="n">08</span> What already exists</h2>
+      <h3>Most of it survives; nothing has data in it yet</h3>
+
+      <p>Four commits are in. Nothing is deployed and no real cards exist, so restructuring means rewriting migrations rather than migrating data — this is the cheapest moment this change will ever be.</p>
+
+      <ul class="verdicts">
+        <li><span class="v v-keep">Keep</span><span>DDEV with PHP 8.4 and PostgreSQL 16, Laravel 13, Breeze auth, Tailwind v4, tests running against Postgres</span></li>
+        <li><span class="v v-keep">Keep</span><span><code>card_reviews</code> — the log design is right and is exactly what a future FSRS upgrade would need to train on</span></li>
+        <li><span class="v v-keep">Keep</span><span>Day-boundary due dates with the 4am rollover, and their tests</span></li>
+        <li><span class="v v-change">Rework</span><span><code>SpacedRepetitionService</code> → a scheduler with queues and learning steps. The easiness curve changes to Anki's fixed adjustments; roughly half the existing tests carry over unchanged</span></li>
+        <li><span class="v v-change">Rework</span><span><code>cards</code> splits into <code>notes</code> + <code>cards</code>, and <code>card_progress</code> folds into <code>cards</code></span></li>
+        <li><span class="v v-drop">Drop</span><span>The three-button grade enum, and <code>front_text</code>/<code>back_text</code> as the content model</span></li>
+      </ul>
+    </section>
+
+    <section id="order">
+      <h2><span class="n">09</span> Build order</h2>
+      <h3>Each step leaves something you can actually run</h3>
+
+      <ol class="steps">
+        <li>
+          <h4>Reshape the schema</h4>
+          <p>Notes, cards with queues, decks with per-deck settings. Factories and model tests.</p>
+        </li>
+        <li>
+          <h4>Scheduler with learning steps</h4>
+          <p>Queues, four grades, fuzz, leeches, caps. Pure and heavily tested before anything touches it — this is the part that is expensive to get wrong quietly.</p>
+        </li>
+        <li>
+          <h4>Manual note entry and the review screen</h4>
+          <p>No AI yet. Type a sentence, pick the target, review it. At this point the app is already usable and the core is proven.</p>
+        </li>
+        <li>
+          <h4>Gemini integration</h4>
+          <p>Structured output, the approve-before-save step, caching. Now adding a sentence takes seconds.</p>
+        </li>
+        <li>
+          <h4>Images and audio</h4>
+          <p>Unsplash on the scene query with its rate-limited queue, TTS for sentence and target, local caching. The card becomes what it is meant to be.</p>
+        </li>
+        <li>
+          <h4>Session rules</h4>
+          <p>Daily limits, sibling burying, session ordering, undo.</p>
+        </li>
+        <li>
+          <h4>Browse and stats</h4>
+          <p>Search, edit, suspend, leech triage. Heatmap, forecast, retention.</p>
+        </li>
+        <li>
+          <h4>PWA</h4>
+          <p>Manifest, icons, service worker, install prompt. Last, because it wraps a finished app rather than shaping one.</p>
+        </li>
+      </ol>
+
+      <div class="flag" style="margin-top: 26px;">
+        <span class="tag">Deliberately not in this version</span>
+        <p>Offline review with sync, Anki import/export, shared decks, speech recognition, push notifications, and FSRS. The review log is being kept in a shape that lets FSRS arrive later without a migration — it needs the history this design is already recording.</p>
+      </div>
+    </section>
+
+    <footer>
+      FlashAI · revised plan · supersedes the initial draft
+    </footer>
+
+  </main>
+</div>
