@@ -14,8 +14,9 @@ use Illuminate\Support\Carbon;
  * One row per grade the user has given. Append-only: nothing updates a review
  * after the fact, which is what lets the stats screen trust it.
  */
+// card_id and user_id are deliberately absent: ownership is derived from the
+// card being graded, never from anything the request can influence.
 #[Fillable([
-    'card_id',
     'quality',
     'repetitions_before',
     'repetitions_after',

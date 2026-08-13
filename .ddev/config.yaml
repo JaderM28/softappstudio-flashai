@@ -294,5 +294,5 @@ corepack_enable: false
 
 hooks:
   post-start:
-    # Crea la base de datos dedicada a la suite de tests (ver phpunit.xml).
+    # Creates the dedicated database for the test suite (see phpunit.xml).
     - exec: "psql -U db -d db -f /var/www/html/.ddev/sql/create-testing-db.sql"

@@ -18,9 +18,9 @@ enum ReviewQuality: int
     public function label(): string
     {
         return match ($this) {
-            self::Wrong => 'Mal',
-            self::Hard => 'Difícil',
-            self::Easy => 'Fácil',
+            self::Wrong => 'Wrong',
+            self::Hard => 'Hard',
+            self::Easy => 'Easy',
         };
     }
 

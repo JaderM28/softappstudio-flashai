@@ -31,9 +31,9 @@ enum CardState: string
     public function label(): string
     {
         return match ($this) {
-            self::New => 'Nueva',
-            self::Learning => 'Aprendiendo',
-            self::Mastered => 'Dominada',
+            self::New => 'New',
+            self::Learning => 'Learning',
+            self::Mastered => 'Mastered',
         };
     }
 }

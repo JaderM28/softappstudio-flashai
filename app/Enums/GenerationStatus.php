@@ -20,10 +20,10 @@ enum GenerationStatus: string
     public function label(): string
     {
         return match ($this) {
-            self::Pending => 'En cola',
-            self::Processing => 'Generando…',
-            self::Completed => 'Lista',
-            self::Failed => 'Falló',
+            self::Pending => 'Queued',
+            self::Processing => 'Generating…',
+            self::Completed => 'Ready',
+            self::Failed => 'Failed',
         };
     }
 }
