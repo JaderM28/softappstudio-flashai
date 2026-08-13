@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\CardProgress;
+use App\Models\Card;
 use App\Support\Sm2State;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
@@ -75,7 +75,7 @@ class SpacedRepetitionService
     {
         return new Sm2State(
             repetitions: 0,
-            easiness: CardProgress::DEFAULT_EASINESS,
+            easiness: Card::DEFAULT_EASINESS,
             intervalDays: 0,
             nextReviewAt: $now?->copy() ?? now(),
         );

@@ -2,30 +2,34 @@
 
 namespace App\Models;
 
-use App\Enums\GenerationStatus;
+use App\Enums\CardQueue;
+use App\Enums\CardState;
+use App\Enums\CardType;
 use Database\Factories\CardFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Carbon;
 
+/**
+ * One question about a note, carrying its own schedule.
+ */
 #[Fillable([
-    'deck_id',
-    'front_text',
-    'back_text',
-    'example_sentence',
-    'pronunciation_note',
-    'image_url',
-    'image_path',
-    'image_attribution',
-    'audio_front_path',
-    'audio_back_path',
-    'generation_status',
-    'generation_error',
+    'type',
+    'queue',
+    'learning_step',
+    'repetitions',
+    'easiness',
+    'interval_days',
+    'next_review_at',
+    'lapses',
+    'buried_until',
+    'last_grade',
+    'last_reviewed_at',
 ])]
 class Card extends Model
 {
@@ -33,14 +37,36 @@ class Card extends Model
     use HasFactory;
 
     /**
+     * The easiness a card starts on, and the floor it can never drop below.
+     */
+    public const DEFAULT_EASINESS = 2.5;
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
     {
         return [
-            'image_attribution' => 'array',
-            'generation_status' => GenerationStatus::class,
+            'type' => CardType::class,
+            'queue' => CardQueue::class,
+            'learning_step' => 'integer',
+            'repetitions' => 'integer',
+            // float, not decimal:2, because the scheduler multiplies by it and
+            // a string cast would coerce on every calculation.
+            'easiness' => 'float',
+            'interval_days' => 'integer',
+            'lapses' => 'integer',
+            'last_grade' => 'integer',
+            'next_review_at' => 'datetime',
+            'buried_until' => 'datetime',
+            'last_reviewed_at' => 'datetime',
         ];
+    }
+
+    /** @return BelongsTo<Note, $this> */
+    public function note(): BelongsTo
+    {
+        return $this->belongsTo(Note::class);
     }
 
     /** @return BelongsTo<User, $this> */
@@ -55,16 +81,21 @@ class Card extends Model
         return $this->belongsTo(Deck::class);
     }
 
-    /** @return HasOne<CardProgress, $this> */
-    public function progress(): HasOne
-    {
-        return $this->hasOne(CardProgress::class);
-    }
-
     /** @return HasMany<CardReview, $this> */
     public function reviews(): HasMany
     {
         return $this->hasMany(CardReview::class);
+    }
+
+    /**
+     * The other cards made from the same note.
+     *
+     * @return HasMany<Card, $this>
+     */
+    public function siblings(): HasMany
+    {
+        return $this->hasMany(self::class, 'note_id', 'note_id')
+            ->whereKeyNot($this->getKey());
     }
 
     /**
@@ -76,39 +107,61 @@ class Card extends Model
     }
 
     /**
-     * Prefer our cached copy so a review session never hits the Unsplash rate
-     * limit, and fall back to the remote URL while the cache job is still queued.
+     * Everything a session could draw from: studiable, due, and not buried
+     * behind a sibling answered earlier today.
+     *
+     * @param  Builder<$this>  $query
      */
-    public function imageSrc(): ?string
+    public function scopeDue(Builder $query, ?Carbon $at = null): void
     {
-        if ($this->image_path !== null) {
-            return Storage::disk('public')->url($this->image_path);
-        }
+        $at ??= now();
 
-        return $this->image_url;
-    }
-
-    public function audioFrontSrc(): ?string
-    {
-        return $this->audio_front_path === null
-            ? null
-            : Storage::disk('public')->url($this->audio_front_path);
-    }
-
-    public function audioBackSrc(): ?string
-    {
-        return $this->audio_back_path === null
-            ? null
-            : Storage::disk('public')->url($this->audio_back_path);
+        $query->whereIn('queue', array_map(
+            fn (CardQueue $queue) => $queue->value,
+            array_filter(CardQueue::cases(), fn (CardQueue $queue) => $queue->isStudiable()),
+        ))
+            ->where('next_review_at', '<=', $at)
+            ->where(fn (Builder $sub) => $sub
+                ->whereNull('buried_until')
+                ->orWhere('buried_until', '<=', $at));
     }
 
     /**
-     * A card is only worth showing in a review once the AI has filled in the
-     * back of it.
+     * @param  Builder<$this>  $query
      */
-    public function isReviewable(): bool
+    public function scopeInQueue(Builder $query, CardQueue $queue): void
     {
-        return $this->generation_status === GenerationStatus::Completed
-            && $this->back_text !== null;
+        $query->where('queue', $queue->value);
+    }
+
+    /**
+     * @return Attribute<CardState, never>
+     */
+    protected function state(): Attribute
+    {
+        return Attribute::get(fn (): CardState => CardState::fromCard(
+            $this->queue,
+            $this->interval_days,
+        ));
+    }
+
+    public function isBuried(?Carbon $at = null): bool
+    {
+        return $this->buried_until !== null
+            && $this->buried_until->greaterThan($at ?? now());
+    }
+
+    public function isSuspended(): bool
+    {
+        return $this->queue === CardQueue::Suspended;
+    }
+
+    /**
+     * Whether the note behind this card can actually supply the question. A
+     * card whose audio has not been generated yet cannot be a listening card.
+     */
+    public function isAnswerable(): bool
+    {
+        return $this->note->supports($this->type);
     }
 }

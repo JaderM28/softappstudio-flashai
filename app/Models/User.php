@@ -37,6 +37,12 @@ class User extends Authenticatable
         return $this->hasMany(Deck::class);
     }
 
+    /** @return HasMany<Note, $this> */
+    public function notes(): HasMany
+    {
+        return $this->hasMany(Note::class);
+    }
+
     /** @return HasMany<Card, $this> */
     public function cards(): HasMany
     {
@@ -47,5 +53,14 @@ class User extends Authenticatable
     public function reviews(): HasMany
     {
         return $this->hasMany(CardReview::class);
+    }
+
+    /**
+     * The deck new sentences land in when none is chosen. Every user has one,
+     * so quick capture never has to stop and ask.
+     */
+    public function defaultDeck(): ?Deck
+    {
+        return $this->decks()->where('is_default', true)->first();
     }
 }
