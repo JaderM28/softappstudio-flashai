@@ -50,6 +50,9 @@ class NoteController extends Controller
             'decks' => $this->decksFor($request),
             'selectedDeckId' => $request->integer('deck')
                 ?: $this->ensureDefaultDeck->handle($request->user())->id,
+            // Without a key the generate box is hidden rather than shown and
+            // then failing; typing the sentence yourself still works.
+            'generatorAvailable' => filled(config('services.gemini.key')),
         ]);
     }
 

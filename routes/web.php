@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\NoteController;
+use App\Http\Controllers\NoteGenerationController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReviewController;
 use Illuminate\Support\Facades\Route;
@@ -15,6 +16,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/review', [ReviewController::class, 'show'])->name('review.show');
     Route::post('/review/{card}', [ReviewController::class, 'grade'])->name('review.grade');
+
+    Route::post('/notes/generate', NoteGenerationController::class)
+        ->middleware('throttle:20,1')
+        ->name('notes.generate');
 
     Route::resource('notes', NoteController::class)->except('show');
 });

@@ -29,9 +29,14 @@ class Deck extends Model
     use HasFactory;
 
     /**
+     * Mirrors the column defaults, so a freshly created deck carries them in
+     * memory too rather than only after a reload.
+     *
      * @var array<string, mixed>
      */
     protected $attributes = [
+        'target_language' => 'en',
+        'native_language' => 'es',
         'show_translation' => true,
         'is_default' => false,
     ];

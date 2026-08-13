@@ -35,4 +35,18 @@ return [
         ],
     ],
 
+    'gemini' => [
+        'key' => env('GEMINI_API_KEY'),
+        'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
+        'model' => env('GEMINI_MODEL', 'gemini-2.0-flash'),
+
+        // The user is waiting on this call, so it fails fast rather than
+        // leaving them looking at a spinner.
+        'timeout' => (int) env('GEMINI_TIMEOUT', 20),
+
+        // Looking a word up twice is common, and the free tier is 1,500 calls
+        // a day. Set to 0 to disable caching.
+        'cache_ttl' => (int) env('GEMINI_CACHE_TTL', 60 * 60 * 24 * 30),
+    ],
+
 ];

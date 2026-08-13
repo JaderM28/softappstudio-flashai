@@ -22,10 +22,14 @@ class StoreNoteRequest extends FormRequest
             ],
             'sentence' => ['required', 'string', 'max:500'],
             'target' => ['required', 'string', 'max:120'],
+            'target_lemma' => ['nullable', 'string', 'max:120'],
             'meaning' => ['nullable', 'string', 'max:500'],
             'translation' => ['nullable', 'string', 'max:500'],
             'pronunciation' => ['nullable', 'string', 'max:120'],
             'source' => ['nullable', 'string', 'max:120'],
+            // Carried through from generation so the picture search runs on the
+            // scene the model described rather than on the target word.
+            'image_query' => ['nullable', 'string', 'max:120'],
         ];
     }
 
