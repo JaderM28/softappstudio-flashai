@@ -290,3 +290,9 @@ corepack_enable: false
 # information on the commands that can be extended and the tasks you can define
 # for them. Example:
 #hooks:
+
+
+hooks:
+  post-start:
+    # Crea la base de datos dedicada a la suite de tests (ver phpunit.xml).
+    - exec: "psql -U db -d db -f /var/www/html/.ddev/sql/create-testing-db.sql"
