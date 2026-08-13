@@ -4,6 +4,14 @@
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 
+/*
+  Alpine hides these once it boots, but the markup is in the DOM before that
+  runs — without this the answer flashes on screen before the question.
+*/
+[x-cloak] {
+  display: none !important;
+}
+
 @theme {
   --font-sans:
     Figtree, ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
