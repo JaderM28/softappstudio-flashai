@@ -15,6 +15,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
 
     Route::get('/review', [ReviewController::class, 'show'])->name('review.show');
+    Route::post('/review/undo', [ReviewController::class, 'undo'])->name('review.undo');
     Route::post('/review/{card}', [ReviewController::class, 'grade'])->name('review.grade');
 
     Route::post('/notes/generate', NoteGenerationController::class)

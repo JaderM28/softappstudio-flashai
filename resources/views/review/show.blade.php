@@ -22,9 +22,21 @@
 
         <div class="max-w-xl mx-auto px-4 sm:px-6 space-y-4">
 
+            <x-flash-status />
+
             {{-- What is left, so the session has a visible end. --}}
-            <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                <span>{{ $deck->name }}</span>
+            <div class="flex items-center justify-between gap-4 text-xs text-gray-500 dark:text-gray-400">
+                <span class="flex items-center gap-3">
+                    <span>{{ $deck->name }}</span>
+                    @if ($canUndo)
+                        <form method="POST" action="{{ route('review.undo') }}">
+                            @csrf
+                            <button type="submit" class="hover:text-gray-900 dark:hover:text-gray-100 underline">
+                                {{ __('Undo') }}
+                            </button>
+                        </form>
+                    @endif
+                </span>
                 <span class="flex gap-3 tabular-nums">
                     @foreach ($counts as $queue => $count)
                         @if ($count > 0)

@@ -27,6 +27,8 @@ class DashboardController extends Controller
             'counts' => $this->queue->counts($user),
             'dueCount' => $this->queue->dueCount($user),
             'noteCount' => $user->notes()->count(),
+            'newRemaining' => $this->queue->newSentencesRemaining($user),
+            'reviewsRemaining' => $this->queue->reviewsRemaining($user),
             'states' => collect(CardState::cases())
                 ->mapWithKeys(fn (CardState $state) => [
                     $state->value => (int) $byState->get($state->value, 0),

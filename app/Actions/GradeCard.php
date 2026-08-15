@@ -19,6 +19,7 @@ class GradeCard
 {
     public function __construct(
         private readonly Scheduler $scheduler,
+        private readonly BurySiblings $burySiblings,
     ) {}
 
     public function handle(
@@ -65,6 +66,11 @@ class GradeCard
             $review->card_id = $fresh->id;
             $review->user_id = $fresh->user_id;
             $review->save();
+
+            // Hold this sentence's other questions back until tomorrow, so the
+            // second one is not answered with the first one's answer still on
+            // screen.
+            $this->burySiblings->handle($fresh, $now);
 
             return $fresh;
         });

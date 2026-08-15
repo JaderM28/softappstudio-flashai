@@ -41,6 +41,17 @@
                             : __('Nothing due. Come back tomorrow.') }}
                     </p>
                 @endif
+
+                @if ($noteCount > 0)
+                    {{-- The allowance, so a long backlog never looks bottomless
+                         and a light day is visibly finished. --}}
+                    <p class="mt-4 text-xs text-gray-400 dark:text-gray-500 tabular-nums">
+                        {{ __('Today: :new new sentences and :reviews reviews left in the allowance', [
+                            'new' => $newRemaining,
+                            'reviews' => $reviewsRemaining,
+                        ]) }}
+                    </p>
+                @endif
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
