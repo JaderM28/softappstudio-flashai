@@ -32,9 +32,17 @@ services:
         sync: false
 
       # ---------------------------------------------------------- database
-      # Supabase Postgres. Use the connection pooler URI (port 6543) rather
-      # than the direct one: the free instance opens a connection per php-fpm
-      # child and per queue worker, and the direct limit is small.
+      # Supabase Postgres, reached through Supavisor in SESSION mode — the
+      # pooler host, port 5432, user postgres.<project-ref>.
+      #
+      # Not the direct db.<ref>.supabase.co host, which resolves to IPv6 only.
+      # Render has no IPv6 egress, so that address fails with "Network
+      # unreachable" before authentication is ever attempted, and the error
+      # says nothing about IPv6. The shared pooler is IPv4 on every tier.
+      #
+      # Session mode rather than transaction mode (port 6543): transaction mode
+      # hands out a different backend per statement, which breaks the prepared
+      # statements PDO issues by default.
       - key: DB_CONNECTION
         value: pgsql
 
