@@ -37,7 +37,11 @@ services:
       # child and per queue worker, and the direct limit is small.
       - key: DB_CONNECTION
         value: pgsql
-      - key: DATABASE_URL
+
+      # DB_URL, not DATABASE_URL: config/database.php reads env('DB_URL'), and
+      # the other name is silently ignored — Laravel would fall back to
+      # DB_HOST/DB_DATABASE, which are not set, and fail on the first query.
+      - key: DB_URL
         sync: false
 
       # ------------------------------------------------------------- queue
