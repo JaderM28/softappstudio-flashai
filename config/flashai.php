@@ -191,4 +191,54 @@ return [
 
     ],
 
+    'media' => [
+
+        /*
+        |----------------------------------------------------------------------
+        | Where pictures and audio are stored
+        |----------------------------------------------------------------------
+        |
+        | The local public disk in development, and an S3 disk pointed at
+        | Supabase Storage in production. Every call site goes through the
+        | Storage facade with this name, so moving between them is a change to
+        | .env and nothing else.
+        |
+        | Supabase speaks S3 at /storage/v1/s3, so the stock `s3` disk works:
+        | set MEDIA_DISK=s3 with AWS_ENDPOINT, AWS_BUCKET and the key pair.
+        |
+        */
+
+        'disk' => env('MEDIA_DISK', 'public'),
+
+        'audio' => [
+
+            /*
+            |------------------------------------------------------------------
+            | Compress the audio after synthesising it
+            |------------------------------------------------------------------
+            |
+            | Gemini returns raw PCM, which is wrapped in a WAV header to make
+            | it playable. WAV does not compress: roughly 230 KB a note against
+            | 20 KB for MP3, and Supabase's free tier is a 1 GB bucket — the
+            | difference between about nineteen months of daily use and about
+            | four years.
+            |
+            | So this is on wherever ffmpeg exists, which on a container host
+            | is one line in the image. It degrades rather than fails: no
+            | ffmpeg means the WAV is stored as it is, and a note with bulky
+            | audio is still a note with audio.
+            |
+            */
+
+            'compress' => (bool) env('FLASHAI_COMPRESS_AUDIO', true),
+
+            'ffmpeg' => env('FLASHAI_FFMPEG_PATH', 'ffmpeg'),
+
+            // Speech, mono, at a bitrate chosen for words rather than music.
+            'bitrate' => env('FLASHAI_AUDIO_BITRATE', '48k'),
+
+        ],
+
+    ],
+
 ];

@@ -42,15 +42,15 @@ return new class extends Migration
             $table->string('pronunciation')->nullable();
 
             // The search terms describe the scene, not the target word:
-            // searching Unsplash for "borrowed" returns handshakes and loan
+            // searching a stock library for "borrowed" returns handshakes and loan
             // paperwork, while "umbrella rain street" returns the sentence.
             // Kept so a bad picture can be refetched without another AI call.
             $table->string('image_query')->nullable();
 
-            // The picture is hotlinked from Unsplash's CDN: their guidelines
-            // ask for that, and serving an image does not count against the
-            // rate limit — only searching does. image_path is left for a
-            // future offline mode, which would need a local copy.
+            // The picture is downloaded and kept: Pixabay, which is tried
+            // first, allows its URLs for displaying search results and forbids
+            // permanent hotlinking from inside an app. image_url is kept
+            // beside the copy because that is where the credit links back to.
             $table->text('image_url')->nullable();
             $table->string('image_path')->nullable();
             $table->json('image_attribution')->nullable();
@@ -63,7 +63,7 @@ return new class extends Migration
             $table->string('source')->nullable();
 
             // Tracked per asset because the three services fail independently
-            // and Unsplash rate-limits far sooner than the others. A note with
+            // and image search rate-limits far sooner than the rest. A note with
             // text and audio but no picture is still perfectly studiable.
             $table->string('content_status')->default('pending');
             $table->string('image_status')->default('pending');

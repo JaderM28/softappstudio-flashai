@@ -18,7 +18,7 @@ class FakeSpeechSynthesizer implements SpeechSynthesizer
 
     public function willFail(?MediaFetchFailed $failure = null): self
     {
-        $this->failure = $failure ?? MediaFetchFailed::rejected('Google TTS', 429, 'quota exceeded');
+        $this->failure = $failure ?? MediaFetchFailed::rejected('Gemini speech', 429, 'quota exceeded');
 
         return $this;
     }
@@ -33,7 +33,7 @@ class FakeSpeechSynthesizer implements SpeechSynthesizer
 
         // Not a real MP3, but bytes that differ per input so tests can tell the
         // sentence clip from the target clip.
-        return new SynthesizedAudio('ID3'.md5($text.$language));
+        return new SynthesizedAudio('ID3'.md5($text.$language), 'mp3');
     }
 
     /**

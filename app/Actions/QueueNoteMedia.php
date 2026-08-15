@@ -18,7 +18,7 @@ class QueueNoteMedia
 {
     public function handle(Note $note, bool $image = true, bool $audio = true): void
     {
-        if ($image && filled(config('services.unsplash.key'))) {
+        if ($image && $this->canFetchImages()) {
             $note->update(['image_status' => AssetStatus::Pending]);
 
             // afterCommit, so the worker cannot pick the job up before the row
@@ -26,10 +26,22 @@ class QueueNoteMedia
             FetchNoteImage::dispatch($note)->afterCommit();
         }
 
-        if ($audio && filled(config('services.google_tts.key'))) {
+        if ($audio && filled(config('services.gemini.key'))) {
             $note->update(['audio_status' => AssetStatus::Pending]);
 
             SynthesizeNoteAudio::dispatch($note)->afterCommit();
         }
+    }
+
+    /**
+     * Openverse needs no key, so pictures are reachable even with nothing
+     * configured — but a chain that can only reach its last resort is worth
+     * being deliberate about rather than surprised by.
+     */
+    private function canFetchImages(): bool
+    {
+        return filled(config('services.pixabay.key'))
+            || filled(config('services.unsplash.key'))
+            || filled(config('services.openverse.base_url'));
     }
 }

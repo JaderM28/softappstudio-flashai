@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Services\Media\FakeImageProvider;
 use App\Services\Media\FakeSpeechSynthesizer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -28,16 +29,31 @@ class NoteMediaTest extends TestCase
 
     private FakeSpeechSynthesizer $speech;
 
+    /**
+     * How the CDN answers when the job downloads the picture. A property rather
+     * than a per-test Http::fake because repeat calls to fake() merge with the
+     * stub set here instead of replacing it, so the first one would always win.
+     */
+    private int $downloadStatus = 200;
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        Storage::fake('public');
+        Storage::fake(config('flashai.media.disk'));
 
         config([
-            'services.unsplash.key' => 'test-key',
-            'services.google_tts.key' => 'test-key',
+            'services.pixabay.key' => 'test-key',
+            'services.gemini.key' => 'test-key',
         ]);
+
+        // The picture is downloaded now rather than hotlinked, so the job makes
+        // a second request the fake provider knows nothing about.
+        Http::fake(fn () => Http::response(
+            $this->downloadStatus === 200 ? 'jpeg-bytes' : '',
+            $this->downloadStatus,
+            ['Content-Type' => 'image/jpeg'],
+        ));
 
         $this->images = new FakeImageProvider;
         $this->speech = new FakeSpeechSynthesizer;
@@ -57,7 +73,7 @@ class NoteMediaTest extends TestCase
 
     // -------------------------------------------------------------- images
 
-    public function test_the_image_job_searches_the_scene_and_stores_the_link(): void
+    public function test_the_image_job_searches_the_scene(): void
     {
         $note = $this->note();
 
@@ -68,27 +84,62 @@ class NoteMediaTest extends TestCase
         // Searched on the scene, not on "borrowed".
         $this->assertSame(['umbrella rain street'], $this->images->queries);
         $this->assertSame(AssetStatus::Ready, $note->image_status);
-        $this->assertStringStartsWith('https://images.unsplash.test/', $note->image_url);
-        $this->assertSame($note->image_url, $note->imageSrc());
     }
 
     /**
-     * The picture is hotlinked from Unsplash's CDN. Their guidelines ask for
-     * that, and serving an image does not count against the rate limit, so a
-     * local copy would cost disk and break their terms to solve nothing.
+     * Pixabay allows its URLs for displaying search results and forbids
+     * permanent hotlinking from inside an app, so the file is kept. It also
+     * means a card survives the picture being deleted at the source.
      */
-    public function test_the_image_is_hotlinked_rather_than_copied(): void
+    public function test_the_picture_is_downloaded_and_stored(): void
     {
         $note = $this->note();
 
         (new FetchNoteImage($note))->handle($this->images);
 
-        $this->assertNull($note->fresh()->image_path);
-        $this->assertSame([], Storage::disk('public')->allFiles('notes/images'));
+        $note->refresh();
+
+        $this->assertNotNull($note->image_path);
+        Storage::disk(config('flashai.media.disk'))->assertExists($note->image_path);
+        $this->assertSame('jpeg-bytes', Storage::disk(config('flashai.media.disk'))->get($note->image_path));
+
+        // The card is served the stored copy, not the remote one.
+        $this->assertStringNotContainsString('pixabay.test', (string) $note->imageSrc());
     }
 
     /**
-     * Reporting use back to Unsplash is a condition of their API terms.
+     * Kept beside the copy because it is where the credit on the card links
+     * back to.
+     */
+    public function test_the_original_url_is_remembered(): void
+    {
+        $note = $this->note();
+
+        (new FetchNoteImage($note))->handle($this->images);
+
+        $this->assertStringStartsWith('https://images.pixabay.test/', $note->fresh()->image_url);
+    }
+
+    /**
+     * A picture that cannot be downloaded is not a picture, whatever the search
+     * said.
+     */
+    public function test_a_download_that_fails_marks_the_image_failed(): void
+    {
+        $this->downloadStatus = 404;
+        $note = $this->note();
+
+        (new FetchNoteImage($note))->handle($this->images);
+
+        $note->refresh();
+
+        $this->assertSame(AssetStatus::Failed, $note->image_status);
+        $this->assertNull($note->image_path);
+    }
+
+    /**
+     * Only Unsplash requires this, and it stays a no-op on the other two — but
+     * the chain has to keep passing it along for that to be true.
      */
     public function test_using_a_picture_is_reported_back(): void
     {
@@ -105,9 +156,10 @@ class NoteMediaTest extends TestCase
 
         (new FetchNoteImage($note))->handle($this->images);
 
-        // Unsplash requires attribution, so it travels with the note.
+        // Which library the picture came from decides how it must be credited,
+        // so the source travels with the photographer.
         $this->assertSame('Ada Lovelace', $note->fresh()->image_attribution['photographer']);
-        $this->assertSame('unsplash', $note->fresh()->image_attribution['source']);
+        $this->assertSame('pixabay', $note->fresh()->image_attribution['source']);
     }
 
     public function test_the_sentence_is_searched_when_there_is_no_scene_query(): void
@@ -122,7 +174,7 @@ class NoteMediaTest extends TestCase
     public function test_a_rejected_key_marks_the_image_failed_without_retrying(): void
     {
         $note = $this->note();
-        $this->images->willFail(MediaFetchFailed::rejected('Unsplash', 401, 'bad key'));
+        $this->images->willFail(MediaFetchFailed::rejected('Pixabay', 401, 'bad key'));
 
         (new FetchNoteImage($note))->handle($this->images);
 
@@ -135,7 +187,7 @@ class NoteMediaTest extends TestCase
     public function test_a_note_without_a_picture_is_still_studiable(): void
     {
         $note = $this->note();
-        $this->images->willFail(MediaFetchFailed::rejected('Unsplash', 401, 'bad key'));
+        $this->images->willFail(MediaFetchFailed::rejected('Pixabay', 401, 'bad key'));
 
         (new FetchNoteImage($note))->handle($this->images);
         (new SynthesizeNoteAudio($note))->handle($this->speech, app(SyncNoteCards::class));
@@ -164,8 +216,8 @@ class NoteMediaTest extends TestCase
             $this->speech->spokenTexts(),
         );
         $this->assertSame(AssetStatus::Ready, $note->audio_status);
-        Storage::disk('public')->assertExists($note->audio_sentence_path);
-        Storage::disk('public')->assertExists($note->audio_target_path);
+        Storage::disk(config('flashai.media.disk'))->assertExists($note->audio_sentence_path);
+        Storage::disk(config('flashai.media.disk'))->assertExists($note->audio_target_path);
     }
 
     public function test_audio_is_spoken_in_the_decks_target_language(): void
@@ -200,7 +252,7 @@ class NoteMediaTest extends TestCase
     public function test_failed_audio_is_reported_on_the_note(): void
     {
         $note = $this->note();
-        $this->speech->willFail(MediaFetchFailed::rejected('Google TTS', 403, 'forbidden'));
+        $this->speech->willFail(MediaFetchFailed::rejected('Gemini speech', 403, 'forbidden'));
 
         (new SynthesizeNoteAudio($note))->handle($this->speech, app(SyncNoteCards::class));
 
@@ -231,13 +283,13 @@ class NoteMediaTest extends TestCase
      */
     public function test_only_transient_failures_are_worth_retrying(): void
     {
-        $this->assertTrue(MediaFetchFailed::rejected('Unsplash', 429, '')->isWorthRetrying());
-        $this->assertTrue(MediaFetchFailed::rejected('Unsplash', 503, '')->isWorthRetrying());
-        $this->assertTrue(MediaFetchFailed::unreachable('Unsplash')->isWorthRetrying());
+        $this->assertTrue(MediaFetchFailed::rejected('Pixabay', 429, '')->isWorthRetrying());
+        $this->assertTrue(MediaFetchFailed::rejected('Pixabay', 503, '')->isWorthRetrying());
+        $this->assertTrue(MediaFetchFailed::unreachable('Pixabay')->isWorthRetrying());
 
-        $this->assertFalse(MediaFetchFailed::rejected('Unsplash', 401, '')->isWorthRetrying());
-        $this->assertFalse(MediaFetchFailed::notConfigured('Unsplash')->isWorthRetrying());
-        $this->assertFalse(MediaFetchFailed::nothingFound('Unsplash', 'x')->isWorthRetrying());
+        $this->assertFalse(MediaFetchFailed::rejected('Pixabay', 401, '')->isWorthRetrying());
+        $this->assertFalse(MediaFetchFailed::notConfigured('Pixabay')->isWorthRetrying());
+        $this->assertFalse(MediaFetchFailed::nothingFound('Pixabay', 'x')->isWorthRetrying());
     }
 
     // ------------------------------------------------------------ queueing
@@ -260,7 +312,11 @@ class NoteMediaTest extends TestCase
     public function test_nothing_is_queued_for_a_service_that_has_no_key(): void
     {
         Queue::fake();
-        config(['services.unsplash.key' => null]);
+        config([
+            'services.pixabay.key' => null,
+            'services.unsplash.key' => null,
+            'services.openverse.base_url' => null,
+        ]);
         $user = User::factory()->create();
 
         $this->actingAs($user)->post(route('notes.store'), [

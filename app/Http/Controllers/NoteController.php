@@ -26,7 +26,7 @@ class NoteController extends Controller
     ) {}
 
     /**
-     * Ask again for whatever did not come through. Unsplash runs out of free
+     * Ask again for whatever did not come through. Image search runs out of free
      * requests long before the others, so this is the common case rather than
      * an edge one.
      */

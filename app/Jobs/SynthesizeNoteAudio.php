@@ -55,13 +55,13 @@ class SynthesizeNoteAudio implements ShouldQueue
         }
 
         $sentencePath = "notes/audio/{$note->id}-sentence.{$sentence->extension}";
-        Storage::disk('public')->put($sentencePath, $sentence->bytes);
+        Storage::disk(config('flashai.media.disk'))->put($sentencePath, $sentence->bytes);
 
         $targetPath = null;
 
         if ($target !== null && ! $target->isEmpty()) {
             $targetPath = "notes/audio/{$note->id}-target.{$target->extension}";
-            Storage::disk('public')->put($targetPath, $target->bytes);
+            Storage::disk(config('flashai.media.disk'))->put($targetPath, $target->bytes);
         }
 
         $note->update([

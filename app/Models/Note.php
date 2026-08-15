@@ -116,13 +116,15 @@ class Note extends Model
     }
 
     /**
-     * Prefer the cached copy so a review session never depends on Unsplash's
-     * rate limit, falling back to the remote URL while the cache job is queued.
+     * Prefer the stored copy, which is what the picture is served from: the
+     * library it came from may forbid hotlinking, and a review session should
+     * never depend on someone else's CDN. The remote URL is the fallback for
+     * the window between a note being saved and its image job running.
      */
     public function imageSrc(): ?string
     {
         if ($this->image_path !== null) {
-            return Storage::disk('public')->url($this->image_path);
+            return Storage::disk(config('flashai.media.disk'))->url($this->image_path);
         }
 
         return $this->image_url;
@@ -132,14 +134,14 @@ class Note extends Model
     {
         return $this->audio_sentence_path === null
             ? null
-            : Storage::disk('public')->url($this->audio_sentence_path);
+            : Storage::disk(config('flashai.media.disk'))->url($this->audio_sentence_path);
     }
 
     public function audioTargetSrc(): ?string
     {
         return $this->audio_target_path === null
             ? null
-            : Storage::disk('public')->url($this->audio_target_path);
+            : Storage::disk(config('flashai.media.disk'))->url($this->audio_target_path);
     }
 
     /**

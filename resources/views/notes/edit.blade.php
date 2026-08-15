@@ -43,7 +43,9 @@
                                target="_blank" rel="noopener noreferrer" class="underline">
                                 {{ $note->image_attribution['photographer'] ?? __('Unknown') }}
                             </a>
-                            {{ __('on Unsplash') }}
+                            {{-- Which library it came from decides how it has to be credited,
+                                 so the source is read off the note rather than assumed. --}}
+                            {{ __('on') }} {{ Str::title($note->image_attribution['source'] ?? __('a stock library')) }}
                         </p>
                     @endif
                 @endif

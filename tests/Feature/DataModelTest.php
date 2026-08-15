@@ -125,7 +125,7 @@ class DataModelTest extends TestCase
         $this->assertSame(AssetStatus::Ready, $note->content_status);
         $this->assertSame(AssetStatus::Failed, $note->image_status);
         $this->assertSame(AssetStatus::Ready, $note->audio_status);
-        $this->assertSame('Unsplash rate limit reached', $note->generation_errors['image']);
+        $this->assertSame('Pixabay rate limit reached', $note->generation_errors['image']);
     }
 
     // ------------------------------------------------------------ cloze prompt

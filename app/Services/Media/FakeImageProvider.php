@@ -21,7 +21,7 @@ class FakeImageProvider implements ImageProvider
 
     public function willFail(?MediaFetchFailed $failure = null): self
     {
-        $this->failure = $failure ?? MediaFetchFailed::rejected('Unsplash', 429, 'Rate Limit Exceeded');
+        $this->failure = $failure ?? MediaFetchFailed::rejected('Pixabay', 429, 'Rate Limit Exceeded');
 
         return $this;
     }
@@ -35,11 +35,10 @@ class FakeImageProvider implements ImageProvider
         }
 
         return new FoundImage(
-            url: 'https://images.unsplash.test/photo-'.md5($query),
+            url: 'https://images.pixabay.test/photo-'.md5($query).'.jpg',
             photographer: 'Ada Lovelace',
-            photographerUrl: 'https://unsplash.com/@ada',
-            source: 'unsplash',
-            downloadTrackingUrl: 'https://api.unsplash.test/photos/x/download',
+            photographerUrl: 'https://pixabay.com/users/-1/',
+            source: 'pixabay',
             description: $query,
         );
     }

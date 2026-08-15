@@ -71,12 +71,12 @@ class NoteFactory extends Factory
             'translation' => $sample['translation'],
             'pronunciation' => null,
             'image_query' => 'street scene daylight',
-            'image_url' => 'https://images.unsplash.com/photo-'.fake()->numerify('##########'),
+            'image_url' => 'https://pixabay.com/get/'.fake()->numerify('##########').'.jpg',
             'image_path' => "notes/images/{$slug}.jpg",
             'image_attribution' => [
                 'photographer' => fake()->name(),
-                'profile_url' => 'https://unsplash.com/@'.fake()->userName(),
-                'source' => 'unsplash',
+                'profile_url' => 'https://pixabay.com/users/'.fake()->userName().'/',
+                'source' => 'pixabay',
             ],
             'audio_sentence_path' => "notes/audio/{$slug}-sentence.mp3",
             'audio_target_path' => "notes/audio/{$slug}-target.mp3",
@@ -111,7 +111,7 @@ class NoteFactory extends Factory
 
     /**
      * Text and audio came through, the picture did not — the common partial
-     * failure, since Unsplash rate-limits long before the others.
+     * failure, since image search rate-limits long before the rest.
      */
     public function withoutImage(): static
     {
@@ -120,7 +120,7 @@ class NoteFactory extends Factory
             'image_path' => null,
             'image_attribution' => null,
             'image_status' => AssetStatus::Failed,
-            'generation_errors' => ['image' => 'Unsplash rate limit reached'],
+            'generation_errors' => ['image' => 'Pixabay rate limit reached'],
         ]);
     }
 
