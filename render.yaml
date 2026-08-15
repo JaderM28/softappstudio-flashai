@@ -1,0 +1,94 @@
+# One free web service running three processes: nginx, php-fpm and the queue
+# worker. Render sells background workers as a separate paid service, but the
+# container's start command is ours, so the worker simply runs here — see
+# docker/supervisord.conf.
+#
+# Values marked sync:false are set in the Render dashboard rather than committed.
+
+services:
+  - type: web
+    name: flashai
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+
+    envVars:
+      - key: APP_NAME
+        value: FlashAI
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+
+      # php artisan key:generate --show, then paste it in the dashboard.
+      # Losing it makes every encrypted value and every session unreadable.
+      - key: APP_KEY
+        sync: false
+
+      # https://<service-name>.onrender.com, or the custom domain.
+      - key: APP_URL
+        sync: false
+
+      # ---------------------------------------------------------- database
+      # Supabase Postgres. Use the connection pooler URI (port 6543) rather
+      # than the direct one: the free instance opens a connection per php-fpm
+      # child and per queue worker, and the direct limit is small.
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DATABASE_URL
+        sync: false
+
+      # ------------------------------------------------------------- queue
+      # A database queue, not Redis: it needs no extra service, and it means a
+      # job dispatched just before the free instance sleeps is still there when
+      # it wakes up.
+      - key: QUEUE_CONNECTION
+        value: database
+      - key: CACHE_STORE
+        value: database
+      - key: SESSION_DRIVER
+        value: database
+
+      # ----------------------------------------------------------- storage
+      # Supabase Storage over its S3-compatible API. Render's own disk is
+      # ephemeral, so this is not optional: without it every picture and clip
+      # is deleted on the next deploy.
+      - key: MEDIA_DISK
+        value: s3
+      - key: AWS_ENDPOINT
+        sync: false        # https://<project-ref>.supabase.co/storage/v1/s3
+      - key: AWS_BUCKET
+        sync: false
+
+      # Uploading and serving use different URLs on Supabase, and Laravel's
+      # Storage::url() has no way to know that. Without this, files upload
+      # correctly and then 404 in the browser:
+      #   https://<project-ref>.supabase.co/storage/v1/object/public/<bucket>
+      # The bucket has to be marked public in the Supabase dashboard for that
+      # path to resolve.
+      - key: AWS_URL
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_DEFAULT_REGION
+        sync: false        # the region shown on the Supabase storage settings page
+      - key: AWS_USE_PATH_STYLE_ENDPOINT
+        value: true
+
+      # -------------------------------------------------------------- apis
+      # One key for sentences and speech both.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: PIXABAY_API_KEY
+        sync: false
+      - key: UNSPLASH_ACCESS_KEY
+        sync: false
+
+      # ffmpeg is in the image, so this is worth having on: it takes each clip
+      # from about 230 KB to about 20 KB against a 1 GB free bucket.
+      - key: FLASHAI_COMPRESS_AUDIO
+        value: true
