@@ -4,11 +4,27 @@ namespace App\Contracts;
 
 use App\Exceptions\MediaFetchFailed;
 use App\Support\FoundImage;
+use Illuminate\Support\Collection;
 
 interface ImageProvider
 {
     /**
-     * Find one picture for a scene description.
+     * Find pictures for a scene description, best match first.
+     *
+     * Several rather than one because "the right picture" is a judgement the
+     * person studying makes, not the search engine: measured against Pixabay,
+     * four of every five results were relevant and the top hit was wrong twice
+     * out of three queries. Ranking helps; choosing is what settles it.
+     *
+     * @return Collection<int, FoundImage>
+     *
+     * @throws MediaFetchFailed
+     */
+    public function searchMany(string $query, int $limit = 6): Collection;
+
+    /**
+     * The best single match, for the paths that cannot ask — a background
+     * refetch, a diagnostic probe.
      *
      * @throws MediaFetchFailed
      */

@@ -8,12 +8,15 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Stores a sentence and creates the cards that can be asked about it.
+ * Stores a sentence as a draft and sends its picture and clip off to be made.
+ *
+ * It creates no cards. A card exists once its media does and the user has seen
+ * it, which is the compose screen's job — the sentence, meanwhile, is safe from
+ * the moment it is typed no matter what any external service does.
  */
 class CreateNote
 {
     public function __construct(
-        private readonly SyncNoteCards $syncCards,
         private readonly QueueNoteMedia $queueMedia,
     ) {}
 
@@ -34,7 +37,11 @@ class CreateNote
             $note->deck_id = $deck->id;
             $note->save();
 
-            $this->syncCards->handle($note);
+            // No cards yet, on purpose. The sentence is saved the moment it is
+            // typed — it is never lost, whatever the services do — but it
+            // becomes a card only once its picture and its clip exist and have
+            // been looked at and listened to. That approval happens on the
+            // compose screen; see NoteCompositionController.
             $this->queueMedia->handle($note);
 
             return $note->fresh();

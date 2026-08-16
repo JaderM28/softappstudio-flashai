@@ -26,13 +26,17 @@ class GeminiTextToSpeech implements SpeechSynthesizer
     private const SERVICE = 'Gemini speech';
 
     /**
-     * What the model returns, and what the WAV header therefore has to declare.
-     * Fixed by the API rather than requested, so they are constants: it answers
-     * with audio/L16;codec=pcm;rate=24000, single channel.
+     * What to declare in the WAV header when the answer does not say.
+     *
+     * The answer normally does say — every audio block carries its own
+     * sample_rate and channels — so these are the floor rather than the truth.
+     * Bit depth has no field of its own because L16 is sixteen bits by
+     * definition; if Google ever returns another codec, the mime type says so
+     * and wrapping it as L16 would produce noise, so it is checked below.
      */
-    private const SAMPLE_RATE = 24000;
+    private const DEFAULT_SAMPLE_RATE = 24000;
 
-    private const CHANNELS = 1;
+    private const DEFAULT_CHANNELS = 1;
 
     private const BITS_PER_SAMPLE = 16;
 
@@ -61,11 +65,22 @@ class GeminiTextToSpeech implements SpeechSynthesizer
         }
 
         if ($response->failed()) {
-            throw MediaFetchFailed::rejected(self::SERVICE, $response->status(), $response->body());
+            throw MediaFetchFailed::rejected(
+                self::SERVICE,
+                $response->status(),
+                $response->body(),
+                $response->header('Retry-After') ?: null,
+            );
         }
 
+        $audio = $this->audioBlockFrom($response->json());
+
         return new SynthesizedAudio(
-            bytes: $this->wrapInWav($this->pcmFrom($response->json())),
+            bytes: $this->wrapInWav(
+                $this->decode($audio['data']),
+                (int) $audio['sample_rate'],
+                (int) $audio['channels'],
+            ),
             extension: 'wav',
         );
     }
@@ -95,21 +110,79 @@ class GeminiTextToSpeech implements SpeechSynthesizer
     }
 
     /**
-     * The clip arrives base64-encoded. The SDKs expose it as `output_audio`,
-     * but over REST the same block also sits in the `steps` array the sentence
-     * generator reads, so both are checked rather than betting on one.
+     * Find the clip in the answer, along with the format it says it is in.
+     *
+     * Where it actually lives, confirmed against the live API rather than the
+     * documentation: `steps[].content[]`, in the entry whose `type` is `audio`,
+     * under `data` — beside a `sample_rate`, a `channels` and a `mime_type` of
+     * `audio/l16; rate=24000; channels=1`. That is the same `steps` array the
+     * sentence generator reads, with an audio block where it has a text one.
+     *
+     * The documented `output_audio.data` is checked first anyway. Google's own
+     * examples show it at the top level, so it may well appear there one day,
+     * and keeping the path costs one line.
      *
      * @param  array<string, mixed>|null  $payload
+     * @return array{data: string, sample_rate: int, channels: int}
      */
-    private function pcmFrom(?array $payload): string
+    private function audioBlockFrom(?array $payload): array
     {
-        $encoded = data_get($payload, 'output_audio.data')
-            ?? $this->audioFromSteps($payload);
+        foreach ($this->candidateBlocks($payload) as $block) {
+            $data = data_get($block, 'data');
 
-        if (! is_string($encoded) || $encoded === '') {
-            throw MediaFetchFailed::unusableAnswer(self::SERVICE, 'the response carried no audio');
+            if (! is_string($data) || $data === '') {
+                continue;
+            }
+
+            // L16 is what the request asks for and all this class can wrap.
+            // Anything else would be handed to the browser mislabelled, which
+            // is worse than saying plainly that it could not be used.
+            $mime = (string) data_get($block, 'mime_type', 'audio/l16');
+
+            if (! str_contains(mb_strtolower($mime), 'l16')) {
+                throw MediaFetchFailed::unusableAnswer(
+                    self::SERVICE,
+                    "the audio came back as {$mime}, which is not the raw PCM this expects"
+                );
+            }
+
+            return [
+                'data' => $data,
+                'sample_rate' => (int) (data_get($block, 'sample_rate') ?: self::DEFAULT_SAMPLE_RATE),
+                'channels' => (int) (data_get($block, 'channels') ?: self::DEFAULT_CHANNELS),
+            ];
         }
 
+        throw MediaFetchFailed::unusableAnswer(self::SERVICE, 'the response carried no audio');
+    }
+
+    /**
+     * Every place the clip has been known to sit, in the order worth trying.
+     *
+     * @param  array<string, mixed>|null  $payload
+     * @return iterable<int, mixed>
+     */
+    private function candidateBlocks(?array $payload): iterable
+    {
+        yield data_get($payload, 'output_audio');
+
+        foreach ((array) data_get($payload, 'steps', []) as $step) {
+            foreach ((array) data_get($step, 'content', []) as $content) {
+                if (data_get($content, 'type') === 'audio') {
+                    yield $content;
+                }
+            }
+
+            // Older shapes, kept because they cost nothing and an answer that
+            // carries audio anywhere at all beats an exception.
+            yield data_get($step, 'output_audio');
+            yield data_get($step, 'audio');
+            yield data_get($step, 'inline_data');
+        }
+    }
+
+    private function decode(string $encoded): string
+    {
         $bytes = base64_decode($encoded, true);
 
         if ($bytes === false || $bytes === '') {
@@ -120,32 +193,15 @@ class GeminiTextToSpeech implements SpeechSynthesizer
     }
 
     /**
-     * @param  array<string, mixed>|null  $payload
-     */
-    private function audioFromSteps(?array $payload): ?string
-    {
-        foreach ((array) data_get($payload, 'steps', []) as $step) {
-            $data = data_get($step, 'output_audio.data')
-                ?? data_get($step, 'audio.data')
-                ?? data_get($step, 'inline_data.data');
-
-            if (is_string($data) && $data !== '') {
-                return $data;
-            }
-        }
-
-        return null;
-    }
-
-    /**
      * Raw PCM samples are not playable on their own — nothing in them says how
      * fast to read them back. This is the canonical 44-byte RIFF header that
      * says so, which is all the difference between the two formats.
      */
-    private function wrapInWav(string $pcm): string
+    private function wrapInWav(string $pcm, int $sampleRate, int $channels): string
     {
-        $byteRate = self::SAMPLE_RATE * self::CHANNELS * (self::BITS_PER_SAMPLE / 8);
-        $blockAlign = self::CHANNELS * (self::BITS_PER_SAMPLE / 8);
+        $bytesPerSample = (int) (self::BITS_PER_SAMPLE / 8);
+        $byteRate = $sampleRate * $channels * $bytesPerSample;
+        $blockAlign = $channels * $bytesPerSample;
 
         return 'RIFF'
             .pack('V', 36 + strlen($pcm))   // size of everything after this field
@@ -153,10 +209,10 @@ class GeminiTextToSpeech implements SpeechSynthesizer
             .'fmt '
             .pack('V', 16)                  // length of this format block
             .pack('v', 1)                   // 1 = uncompressed PCM
-            .pack('v', self::CHANNELS)
-            .pack('V', self::SAMPLE_RATE)
-            .pack('V', (int) $byteRate)
-            .pack('v', (int) $blockAlign)
+            .pack('v', $channels)
+            .pack('V', $sampleRate)
+            .pack('V', $byteRate)
+            .pack('v', $blockAlign)
             .pack('v', self::BITS_PER_SAMPLE)
             .'data'
             .pack('V', strlen($pcm))

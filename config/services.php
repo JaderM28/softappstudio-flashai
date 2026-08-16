@@ -72,6 +72,46 @@ return [
     ],
 
     /*
+    | Workers AI, over its REST endpoint — there is no Worker to deploy, just a
+    | POST like any other. It reads the cards aloud.
+    |
+    | Measured against the live API rather than assumed: Aura answers in about
+    | a second with an MP3 already encoded, and costs about 1.36 neurons per
+    | character. At 10,000 free neurons a day and roughly 70 neurons a note,
+    | that is about 140 notes a day — against a default allowance of five.
+    |
+    | Gemini's speech tier, by comparison, was measured at ten requests in a
+    | short window and answers in six seconds with raw PCM that has to have a
+    | WAV header built for it and then be compressed. This is the primary for
+    | all three reasons.
+    */
+    'cloudflare' => [
+        'account_id' => env('CLOUDFLARE_ACCOUNT_ID'),
+        'token' => env('CLOUDFLARE_API_TOKEN'),
+        'base_url' => env('CLOUDFLARE_BASE_URL', 'https://api.cloudflare.com/client/v4'),
+
+        'tts' => [
+            'model' => env('CLOUDFLARE_TTS_MODEL', '@cf/deepgram/aura-1'),
+
+            // One of twelve. Chosen once and then never thought about, which is
+            // the point: a learner should hear the same voice every day.
+            'voice' => env('CLOUDFLARE_TTS_VOICE', 'angus'),
+
+            'timeout' => (int) env('CLOUDFLARE_TTS_TIMEOUT', 30),
+        ],
+
+        /*
+        | Whisper, for finding where each word falls inside a clip we made.
+        | Measured at 1.83 neurons for a five-second sentence — paid once per
+        | note, after which tapping any word in it costs nothing.
+        */
+        'transcription' => [
+            'model' => env('CLOUDFLARE_TRANSCRIBE_MODEL', '@cf/openai/whisper-large-v3-turbo'),
+            'timeout' => (int) env('CLOUDFLARE_TRANSCRIBE_TIMEOUT', 30),
+        ],
+    ],
+
+    /*
     | Tried first for pictures: a hundred times Unsplash's ceiling, no approval
     | process, and it carries illustrations as well as photographs — often the
     | clearer flashcard. It forbids permanent hotlinking, which is why the

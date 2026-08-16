@@ -1,0 +1,44 @@
+{
+    "id": "v1_Chc0T1NBYXZIZk9MdUZxdHNQaUktVXlBNBIXNE9TQWF2SGZPTHVGcXRzUGlJLVV5QTQ",
+    "status": "completed",
+    "usage": {
+        "total_tokens": 36,
+        "total_input_tokens": 2,
+        "input_tokens_by_modality": [
+            {
+                "modality": "text",
+                "tokens": 2
+            }
+        ],
+        "total_cached_tokens": 0,
+        "total_output_tokens": 34,
+        "output_tokens_by_modality": [
+            {
+                "modality": "audio",
+                "tokens": 34
+            }
+        ],
+        "total_tool_use_tokens": 0,
+        "total_thought_tokens": 0,
+        "raw_prompt_token": 275
+    },
+    "created": "2026-08-15T22:14:56Z",
+    "updated": "2026-08-15T22:14:56Z",
+    "service_tier": "standard",
+    "steps": [
+        {
+            "content": [
+                {
+                    "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//8AAAAAAQD//wEA//8BAP//AQD//wEA//8BAP//AQD//wEA//8BAP//AQD//wEA//8BAP//AgD//wIA//8CAP//AgD//wEA//8CAP//AQD//wEA//8BAP7/AQD+/wEA/v8BAP7/AQD+/wEA/f8BAP7/AgD9/wEA/f8CAP3/AgD9/wIA/v8DAP3/AwD9/wIA/v8CAP3/AwD+/wMA/f8CAP7/AgD9/wEA/f8CAP7/AgD9/wIA/v8CAP3/AgD+/wIA/f8DAP3/AgD9/wIA/f8CAP3/AwD+/wMA/f8DAP7/AwD9/wMA/v8EAP7/AwD9/wQA/v8EAP7/AgD9/wMA/v8DAP3/AgD+/wMA/v8DAP7/AgD//wMA/v8DAP7/AwD+/wIA/v8CAP7/AgD9/wMA/v8DAP7/AwD+/wMA/f8DAP3/AwD//wQA/v8CAP7/AwD9/wAA+/8BAP7/AgD4//3/AgD+/wYA9f/9//f/HQDr/wgA6f8aAPf/FwDm/xEA3f8FAOf/FADs/yMA4f/+/9j//f/y/yAA8/8XAAQAKgD4/wcA7f8kAP7/KwAOAPf/BgAZABEADwD+//7/EQAEABkAGwAZAPP/CQDv/ykA+/8DAOr/BQAGAB4AEQDz/+X/3/8UAPv/AAC1/+//CAAKAP7/BAAIACMADAACAOz/CwAdAAsA+P8RACYAHgAKAPL/9P8BABgABADW/9n/GAAYABsA4////woAFgD4//T/6f8XAPP/7//C//L/AwD0/83/0f/o/xAAAQDI/9f/+f8bABkA5f/z/wsAHwAQAPP/8v8FAAoABQD///j/GAAOAAkA6//5/w0AFQAHAP3/AAALACIA4//l//P/GwALAPT/9P/t/xgA8f/i/9T/8/8QAAgA8P/x/wYADAAOAOX/BAD8//3/HADt/xsA6v/7/yQA7f8hAB0AFAApAAUA+/8PAA4A7f/3/+P/JQAtAA0A9P/q//n/BQABAPv/7v8pABAAEADV/+7/0P/g/+T/AgDo/xoA4//w/wMA9f8RAN3/9P/0/woALQARAAAA8/8JAA0AFwAWABYADAD3/wAABgDx/+j/4//9/x4AGgD+////+/8CAO3/AADu//H/AwAVAPv/BADn/93/+v/s/w4A5f/3//L/BwD+//D/1v/e//j/BQD9/wMAEQAVABMAFwAsABUA9v/z//T/AwAYABsADgD1/wcADgAZAOj/8//1/x0A/P/3/+P/AwAIAP7/4v/n/wYAIwD//+7/3f/v/wIADADq//n/CQARAAMABwD5//D/9P/8/93/4P8BACAACQD9//v/HgA0ADcAEADT//H/HwANAPD//P8eACkAFwDs//P/AQASAOn/yP/r/xgAFwAOAOn/BgAVABgA8//s//L/JQAGABEA3v/q/wkA+f/e/97/CwAhAAAA7P8AABYAFwAHAPT//f8UABwA+P/1/wQAAQAIAAMA///7/xoAFADr/9f/+P8HAP7/8P8GAAgAHwAdAA4A6P/t/wEAIgACAPz/6f8EABIA+P8BAPT//v/5/wAA/v8RAAcACwACAAsAEwAPAOz/DgAFABwAAQAGAO3/8P/5//7/6/8EAOz/FAAaAAQA/f8HACAADwDz//z///8JAAYAEgD6/wAA+P8WAPz/AQAFAPn/CgAEAPj/6f8SAA4AEADx/wQAAQD6/xAADgD//wMACQD9//P/9P8MAP//EAATABQABQAXAO//AgDq/xgAFQAJAPL/AQD5/wAA6//3/+H/CAAEAAsA8P/1//7/BwD7//7/CgANABIACAAAAA0AEQAZAPD/9P8BABIA+f8OAPD/DwD0/+3/zv/9/wkA/f/T//r/",
+                    "channels": 1,
+                    "sample_rate": 24000,
+                    "mime_type": "audio/l16; rate=24000; channels=1",
+                    "type": "audio"
+                }
+            ],
+            "type": "model_output"
+        }
+    ],
+    "object": "interaction",
+    "model": "gemini-3.1-flash-tts-preview"
+}

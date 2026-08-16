@@ -4,8 +4,11 @@ namespace App\Services\Media;
 
 use App\Contracts\ImageProvider;
 use App\Exceptions\MediaFetchFailed;
+use App\Services\Media\Concerns\PicksFirstCandidate;
+use App\Services\Media\Concerns\RanksByRelevance;
 use App\Support\FoundImage;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -22,16 +25,19 @@ use Illuminate\Support\Facades\Http;
  */
 class OpenverseImageProvider implements ImageProvider
 {
+    use PicksFirstCandidate;
+    use RanksByRelevance;
+
     private const SERVICE = 'Openverse';
 
-    public function search(string $query): FoundImage
+    public function searchMany(string $query, int $limit = 6): Collection
     {
         try {
             $response = Http::withHeaders(['Accept' => 'application/json'])
                 ->timeout((int) config('services.openverse.timeout'))
                 ->get(rtrim(config('services.openverse.base_url'), '/').'/images/', [
                     'q' => $query,
-                    'page_size' => 3,
+                    'page_size' => $limit,
                     'aspect_ratio' => 'wide',
                     'mature' => 'false',
                     // Licences that allow use without asking. Openverse indexes
@@ -44,22 +50,45 @@ class OpenverseImageProvider implements ImageProvider
         }
 
         if ($response->failed()) {
-            throw MediaFetchFailed::rejected(self::SERVICE, $response->status(), $response->body());
+            throw MediaFetchFailed::rejected(
+                self::SERVICE,
+                $response->status(),
+                $response->body(),
+                $response->header('Retry-After') ?: null,
+            );
         }
 
-        $result = data_get($response->json(), 'results.0');
+        $ranked = $this->rankByRelevance(
+            (array) data_get($response->json(), 'results', []),
+            $query,
+            fn (array $hit): ?string => trim(implode(' ', [
+                (string) data_get($hit, 'title'),
+                implode(' ', array_map(
+                    fn ($tag) => (string) data_get($tag, 'name'),
+                    (array) data_get($hit, 'tags', []),
+                )),
+            ])),
+        );
 
-        if (! is_array($result)) {
-            throw MediaFetchFailed::nothingFound(self::SERVICE, $query);
-        }
+        return collect($ranked)
+            ->map(fn (array $hit): ?FoundImage => $this->toFoundImage($hit))
+            ->filter()
+            ->take($limit)
+            ->values();
+    }
 
+    /**
+     * @param  array<string, mixed>  $result
+     */
+    private function toFoundImage(array $result): ?FoundImage
+    {
         // thumbnail is Openverse's own cached copy and is both smaller and far
         // likelier to answer than the original, which may be a dead link on
         // whichever site it was indexed from years ago.
         $url = data_get($result, 'thumbnail') ?? data_get($result, 'url');
 
         if (! is_string($url) || $url === '') {
-            throw MediaFetchFailed::unusableAnswer(self::SERVICE, 'the result had no image URL');
+            return null;
         }
 
         return new FoundImage(
@@ -72,6 +101,7 @@ class OpenverseImageProvider implements ImageProvider
             ),
             source: 'openverse',
             description: $this->describe($result),
+            thumbnailUrl: data_get($result, 'thumbnail'),
         );
     }
 

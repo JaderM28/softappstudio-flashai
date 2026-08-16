@@ -13,6 +13,12 @@ use_dns_when_possible: true
 composer_version: "2"
 web_environment: []
 nodejs_version: "24"
+
+# The production image installs ffmpeg (see Dockerfile) because Gemini answers
+# with raw PCM and a WAV is roughly ten times the size of the MP3 it becomes.
+# Without it here, local runs silently take the uncompressed path — which is
+# exactly the kind of gap that let the media pipeline go unverified for weeks.
+webimage_extra_packages: [ffmpeg]
 corepack_enable: false
 
 # Key features of DDEV's config.yaml:

@@ -189,6 +189,51 @@ return [
 
         'bury_siblings' => (bool) env('FLASHAI_BURY_SIBLINGS', true),
 
+        /*
+        |----------------------------------------------------------------------
+        | Learn ahead limit, in minutes
+        |----------------------------------------------------------------------
+        |
+        | When nothing else is left, cards being drilled through the learning
+        | steps are shown early rather than ending the session.
+        |
+        | Without this the app is unusable on a small collection, and it fails
+        | in the most confusing way possible: you answer "Hard" on a new card,
+        | the scheduler correctly parks it ten minutes out, and the screen tells
+        | you there is nothing left to study. The card was never lost — it just
+        | was not due for another nine minutes and the session had no way to
+        | say so.
+        |
+        | It applies only to the learning and relearning queues. Bringing
+        | day-scale reviews forward would make the SM-2 intervals mean nothing.
+        |
+        | Set to 0 to end the session exactly when the schedule says.
+        |
+        */
+
+        'learn_ahead_minutes' => (int) env('FLASHAI_LEARN_AHEAD_MINUTES', 20),
+
+    ],
+
+    'diagnostics' => [
+
+        /*
+        |----------------------------------------------------------------------
+        | Who may open the system status screen
+        |----------------------------------------------------------------------
+        |
+        | A comma-separated list of email addresses. The screen calls the real
+        | image, speech and sentence services on demand, so it cannot be open
+        | to anyone who signs up.
+        |
+        | Left empty — which is how this deploys by default — it falls back to
+        | the account that registered first, on the assumption that whoever
+        | stood the installation up owns it. Local is always open.
+        |
+        */
+
+        'emails' => env('FLASHAI_DIAGNOSTICS_EMAILS', ''),
+
     ],
 
     'media' => [

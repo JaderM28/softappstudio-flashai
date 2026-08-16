@@ -4,8 +4,11 @@ namespace App\Services\Media;
 
 use App\Contracts\ImageProvider;
 use App\Exceptions\MediaFetchFailed;
+use App\Services\Media\Concerns\PicksFirstCandidate;
+use App\Services\Media\Concerns\RanksByRelevance;
 use App\Support\FoundImage;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -25,9 +28,18 @@ use Illuminate\Support\Facades\Http;
  */
 class PixabayImageProvider implements ImageProvider
 {
+    use PicksFirstCandidate;
+    use RanksByRelevance;
+
+    /**
+     * Their API requires at least three, and asking for more costs the same one
+     * request against the hourly limit.
+     */
+    private const MINIMUM_PER_PAGE = 3;
+
     private const SERVICE = 'Pixabay';
 
-    public function search(string $query): FoundImage
+    public function searchMany(string $query, int $limit = 6): Collection
     {
         $key = config('services.pixabay.key');
 
@@ -40,7 +52,7 @@ class PixabayImageProvider implements ImageProvider
                 ->get(rtrim(config('services.pixabay.base_url'), '/').'/', [
                     'key' => $key,
                     'q' => $query,
-                    'per_page' => 3,
+                    'per_page' => max(self::MINIMUM_PER_PAGE, $limit),
                     // Cards are wider than they are tall, so a portrait shot
                     // would be cropped to nothing.
                     'orientation' => 'horizontal',
@@ -54,22 +66,44 @@ class PixabayImageProvider implements ImageProvider
         }
 
         if ($response->failed()) {
-            throw MediaFetchFailed::rejected(self::SERVICE, $response->status(), $response->body());
+            throw MediaFetchFailed::rejected(
+                self::SERVICE,
+                $response->status(),
+                $response->body(),
+                $response->header('Retry-After') ?: null,
+            );
         }
 
-        $result = data_get($response->json(), 'hits.0');
+        // Not in the order they arrive: Pixabay ranks by popularity, not by
+        // fit. See RanksByRelevance for the real queries that made this
+        // necessary — the top hit was wrong twice out of three.
+        $ranked = $this->rankByRelevance(
+            (array) data_get($response->json(), 'hits', []),
+            $query,
+            fn (array $hit): ?string => data_get($hit, 'tags'),
+        );
 
-        if (! is_array($result)) {
-            throw MediaFetchFailed::nothingFound(self::SERVICE, $query);
-        }
+        return collect($ranked)
+            ->map(fn (array $hit): ?FoundImage => $this->toFoundImage($hit))
+            ->filter()
+            ->take($limit)
+            ->values();
+    }
 
+    /**
+     * @param  array<string, mixed>  $result
+     */
+    private function toFoundImage(array $result): ?FoundImage
+    {
         // webformatURL is the 640px variant. A flashcard is shown a few hundred
         // pixels wide, so storing the full-size original would be paying for
         // pixels nobody sees — and the bucket it lands in is metered.
         $url = data_get($result, 'webformatURL') ?? data_get($result, 'largeImageURL');
 
+        // A hit with no usable URL is dropped rather than fatal: the other five
+        // are still perfectly good answers.
         if (! is_string($url) || $url === '') {
-            throw MediaFetchFailed::unusableAnswer(self::SERVICE, 'the result had no image URL');
+            return null;
         }
 
         return new FoundImage(
@@ -78,6 +112,7 @@ class PixabayImageProvider implements ImageProvider
             photographerUrl: $this->profileUrl($result),
             source: 'pixabay',
             description: $this->describe($result),
+            thumbnailUrl: data_get($result, 'previewURL'),
         );
     }
 

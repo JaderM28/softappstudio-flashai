@@ -1,0 +1,39 @@
+{
+    "id": "v1_ChZCZVdBYXZuTUdZUGc4UUg5anMzSkRBEhZCZVdBYXZuTUdZUGc4UUg5anMzSkRB",
+    "status": "completed",
+    "usage": {
+        "total_tokens": 51,
+        "total_input_tokens": 3,
+        "input_tokens_by_modality": [
+            {
+                "modality": "text",
+                "tokens": 3
+            }
+        ],
+        "total_cached_tokens": 0,
+        "total_output_tokens": 48,
+        "total_tool_use_tokens": 0,
+        "total_thought_tokens": 0,
+        "raw_prompt_token": 128
+    },
+    "created": "2026-08-15T22:15:33Z",
+    "updated": "2026-08-15T22:15:33Z",
+    "service_tier": "standard",
+    "steps": [
+        {
+            "signature": "El4KXAERTTIPN3jS5jW8g4NIdHlfXY3HhBsSNEtQd+FWlOLH+30zQh7ss3Ddvu/1zVcvGZHb1q2RboBCXj5uhWH7Y/zqGRhRmlIdSJchYz+RMzbFmnXMuttBNk9ZCFc3",
+            "type": "thought"
+        },
+        {
+            "content": [
+                {
+                    "text": "{\n  \"sentence\": \"She borrowed a book from the library to read over the weekend.\",\n  \"target\": \"borrowed\",\n  \"image_query\": \"person receiving a book at a library desk\"\n}",
+                    "type": "text"
+                }
+            ],
+            "type": "model_output"
+        }
+    ],
+    "object": "interaction",
+    "model": "gemini-3.5-flash-lite"
+}

@@ -36,5 +36,19 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+
+        <!--
+            The second belt, behind Http::preventStrayRequests() in TestCase.
+            That one stops the request; these make sure that if anything ever
+            gets past it, it does not travel with a real credential. A test
+            that needs a key sets one with config() in its own setUp.
+        -->
+        <env name="GEMINI_API_KEY" value=""/>
+        <env name="PIXABAY_API_KEY" value=""/>
+        <env name="UNSPLASH_ACCESS_KEY" value=""/>
+
+        <!-- Never the production bucket, and never the host's ffmpeg. -->
+        <env name="MEDIA_DISK" value="public"/>
+        <env name="FLASHAI_COMPRESS_AUDIO" value="false"/>
     </php>
 </phpunit>

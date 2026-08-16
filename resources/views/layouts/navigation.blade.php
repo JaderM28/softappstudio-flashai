@@ -44,6 +44,12 @@
                             {{ __('Profile') }}
                         </x-dropdown-link>
 
+                        @can('view-diagnostics')
+                            <x-dropdown-link :href="route('system.show')">
+                                {{ __('System status') }}
+                            </x-dropdown-link>
+                        @endcan
+
                         <!-- Authentication -->
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf

@@ -7,8 +7,9 @@ namespace App\Enums;
  *
  * Tracked per asset rather than once per note because three external services
  * are involved and they fail independently — Unsplash rate-limits far sooner
- * than the others. A note with text and audio but no picture is perfectly
- * studiable, and a single global flag would force us to call it broken.
+ * than the others, and the speech tier is measured in single-digit requests a
+ * minute. A note needs both before it becomes a card, but it needs to be able
+ * to say which half it is still waiting on, and one global flag cannot.
  */
 enum AssetStatus: string
 {

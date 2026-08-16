@@ -10,11 +10,26 @@ use App\Models\Deck;
 use App\Models\Note;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class NoteManagementTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * Saving a sentence dispatches the media jobs, and QUEUE_CONNECTION is sync
+     * in the test environment — so without this they ran here, in-process,
+     * against the real Gemini and Openverse. This file is what was burning the
+     * free tier. Nothing here is about media, so the jobs are held rather than
+     * faked in detail; NoteMediaTest is where they are exercised.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Queue::fake();
+    }
 
     private function payload(array $overrides = []): array
     {
@@ -56,13 +71,21 @@ class NoteManagementTest extends TestCase
             ->assertSee(CardType::Cloze->label());
     }
 
-    public function test_saving_a_sentence_creates_a_note_and_its_cards(): void
+    /**
+     * Saving stores the sentence and nothing else.
+     *
+     * It used to make a cloze card on the spot, with no picture and no audio —
+     * which is how this app ended up full of cards missing the two things it
+     * is built around. The sentence is safe from this moment; the card is made
+     * on the compose screen, once its media exists and has been looked at.
+     */
+    public function test_saving_a_sentence_stores_it_as_a_draft_with_no_cards(): void
     {
         $user = User::factory()->create();
 
         $this->actingAs($user)
             ->post(route('notes.store'), $this->payload())
-            ->assertRedirect();
+            ->assertRedirect(route('notes.compose', Note::query()->sole()));
 
         $note = Note::query()->sole();
 
@@ -70,9 +93,8 @@ class NoteManagementTest extends TestCase
         $this->assertSame('borrowed', $note->target);
         $this->assertSame($user->id, $note->user_id);
 
-        // Only cloze: a hand-typed sentence has no audio yet, so no listening
-        // card can be asked from it.
-        $this->assertSame([CardType::Cloze->value], $note->cards->pluck('type.value')->all());
+        $this->assertSame(0, $note->cards()->count());
+        $this->assertFalse($note->isComplete());
     }
 
     public function test_a_sentence_lands_in_the_default_deck_when_none_is_chosen(): void
@@ -120,18 +142,20 @@ class NoteManagementTest extends TestCase
     }
 
     /**
-     * A target that is not in the sentence produces no cloze card, so the user
-     * has to be told rather than left with a sentence that never comes up.
+     * A target that is not in the sentence can never produce a cloze prompt, so
+     * the compose screen has to say so rather than leave the button greyed out
+     * with no explanation.
      */
     public function test_a_target_missing_from_the_sentence_is_reported(): void
     {
         $user = User::factory()->create();
 
-        $this->actingAs($user)
-            ->post(route('notes.store'), $this->payload(['target' => 'lend']))
-            ->assertSessionHas('status', fn (string $status) => str_contains($status, 'no card'));
+        $this->actingAs($user)->post(route('notes.store'), $this->payload(['target' => 'lend']));
 
-        $this->assertSame(0, Note::query()->sole()->cards()->count());
+        $note = Note::query()->sole();
+
+        $this->assertSame(0, $note->cards()->count());
+        $this->assertContains('target', $note->missingForCards());
     }
 
     public function test_a_lemma_is_guessed_so_duplicates_can_be_spotted_later(): void
@@ -197,7 +221,7 @@ class NoteManagementTest extends TestCase
     {
         $user = User::factory()->create();
         $deck = Deck::factory()->for($user)->create();
-        $note = Note::factory()->inDeck($deck)->withoutClozeTarget()->withoutAudio()->create();
+        $note = Note::factory()->inDeck($deck)->withoutClozeTarget()->create();
 
         $this->assertSame(0, $note->cards()->count());
 
@@ -206,8 +230,11 @@ class NoteManagementTest extends TestCase
             'target' => 'borrowed',
         ]));
 
-        $this->assertSame(
-            [CardType::Cloze->value],
+        // Both, not just the cloze: this note already has its picture and its
+        // clip, so the only thing that was ever missing was a target the
+        // sentence actually contains.
+        $this->assertEqualsCanonicalizing(
+            [CardType::Cloze->value, CardType::Listening->value],
             $note->fresh()->cards->pluck('type.value')->all(),
         );
     }

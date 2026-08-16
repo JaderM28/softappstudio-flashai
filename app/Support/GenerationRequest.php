@@ -14,15 +14,31 @@ readonly class GenerationRequest
         public string $targetLanguage,
         public string $nativeLanguage,
         public ?string $instructions = null,
+        /**
+         * Words this learner is already studying.
+         *
+         * Passed so the sentence can be built out of them. The rule the whole
+         * design rests on is that a sentence contains exactly one thing you do
+         * not know — and until now nothing enforced it, because the model had
+         * no idea what you knew. These lemmas are already stored on every note;
+         * they were simply never used for anything.
+         *
+         * @var array<int, string>
+         */
+        public array $knownWords = [],
     ) {}
 
-    public static function forDeck(string $input, Deck $deck): self
+    /**
+     * @param  array<int, string>  $knownWords
+     */
+    public static function forDeck(string $input, Deck $deck, array $knownWords = []): self
     {
         return new self(
             input: trim($input),
             targetLanguage: $deck->target_language,
             nativeLanguage: $deck->native_language,
             instructions: $deck->prompt_instructions,
+            knownWords: $knownWords,
         );
     }
 
@@ -47,6 +63,15 @@ readonly class GenerationRequest
             $this->targetLanguage,
             $this->nativeLanguage,
             $this->instructions ?? '',
+            // The known words are part of the question, so they have to be part
+            // of its identity — otherwise one learner's sentence is served to
+            // another whose vocabulary it was never shaped around.
+            //
+            // It does cost hit rate: the list grows with every note, so the same
+            // word looked up next week is a different question. That is the
+            // honest answer rather than the convenient one, and the text tier is
+            // 1,500 calls a day against a five-a-day habit.
+            implode(',', $this->knownWords),
         ]));
     }
 }

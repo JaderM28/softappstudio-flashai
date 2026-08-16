@@ -25,6 +25,27 @@ class NoteGenerationController extends Controller
         private readonly EnsureDefaultDeck $ensureDefaultDeck,
     ) {}
 
+    /**
+     * The most recent lemmas this learner has cards for.
+     *
+     * Bounded, and recent rather than random: a few hundred words is enough to
+     * steer the sentence, and the whole collection would be both a large prompt
+     * and mostly words they have long since stopped thinking about.
+     *
+     * @return array<int, string>
+     */
+    private function wordsAlreadyStudied(\App\Models\User $user): array
+    {
+        return $user->notes()
+            ->whereNotNull('target_lemma')
+            ->latest('id')
+            ->limit(200)
+            ->pluck('target_lemma')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     public function __invoke(GenerateNoteRequest $request): RedirectResponse
     {
         $user = $request->user();
@@ -38,7 +59,14 @@ class NoteGenerationController extends Controller
 
         try {
             $generated = $this->generator->generate(
-                GenerationRequest::forDeck($request->string('input')->toString(), $deck)
+                GenerationRequest::forDeck(
+                    $request->string('input')->toString(),
+                    $deck,
+                    // What they already study, so the sentence can be built out
+                    // of it. This is what makes "exactly one new thing" a rule
+                    // rather than a hope.
+                    $this->wordsAlreadyStudied($user),
+                )
             );
         } catch (GenerationFailed $e) {
             Log::warning('Sentence generation failed', [

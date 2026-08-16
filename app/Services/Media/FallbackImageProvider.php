@@ -5,6 +5,7 @@ namespace App\Services\Media;
 use App\Contracts\ImageProvider;
 use App\Exceptions\MediaFetchFailed;
 use App\Support\FoundImage;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -32,11 +33,44 @@ class FallbackImageProvider implements ImageProvider
 
     public function search(string $query): FoundImage
     {
+        return $this->searchMany($query, 1)->first()
+            ?? throw MediaFetchFailed::nothingFound('No image provider', $query);
+    }
+
+    /**
+     * Fills the grid from the libraries in order, and stops as soon as it is
+     * full.
+     *
+     * Topping up rather than falling through matters both ways round: if
+     * Pixabay answers with six, Unsplash is never called and its fifty an hour
+     * stay untouched; if it answers with two, the grid is still six rather than
+     * two, which is the difference between choosing and taking what you are
+     * given.
+     *
+     * @return \Illuminate\Support\Collection<int, FoundImage>
+     */
+    public function searchMany(string $query, int $limit = 6): Collection
+    {
+        $found = collect();
+        $seen = [];
         $failures = [];
 
         foreach ($this->providers as $provider) {
+            if ($found->count() >= $limit) {
+                break;
+            }
+
             try {
-                return $provider->search($query);
+                foreach ($provider->searchMany($query, $limit - $found->count()) as $image) {
+                    // The same picture is indexed by more than one library, and
+                    // twice in a grid of six is a wasted slot.
+                    if (in_array($image->url, $seen, true)) {
+                        continue;
+                    }
+
+                    $seen[] = $image->url;
+                    $found->push($image);
+                }
             } catch (MediaFetchFailed $e) {
                 $failures[] = $e;
 
@@ -47,11 +81,15 @@ class FallbackImageProvider implements ImageProvider
             }
         }
 
-        // Every provider declined, so the note is told why by the last one that
-        // had an opinion. Reporting "no picture matched" when the real cause
-        // was an unconfigured key would send someone looking in the wrong
+        // Every provider declined, so the note is told why by the one that had
+        // the most useful opinion. Reporting "no picture matched" when the real
+        // cause was an unconfigured key would send someone looking in the wrong
         // place, so a configuration problem wins over a search miss.
-        throw $this->mostUseful($failures, $query);
+        if ($found->isEmpty()) {
+            throw $this->mostUseful($failures, $query);
+        }
+
+        return $found->values();
     }
 
     /**

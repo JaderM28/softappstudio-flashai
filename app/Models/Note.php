@@ -31,6 +31,7 @@ use Illuminate\Support\Str;
     'image_attribution',
     'audio_sentence_path',
     'audio_target_path',
+    'word_timings',
     'source',
     'content_status',
     'image_status',
@@ -55,6 +56,7 @@ class Note extends Model
         return [
             'image_attribution' => 'array',
             'generation_errors' => 'array',
+            'word_timings' => 'array',
             'content_status' => AssetStatus::class,
             'image_status' => AssetStatus::class,
             'audio_status' => AssetStatus::class,
@@ -150,13 +152,68 @@ class Note extends Model
      */
     public function supports(CardType $type): bool
     {
-        foreach ($type->requiredNoteAttributes() as $attribute) {
+        $required = $type->requiredNoteAttributes();
+
+        // The deck decides whether a card may exist without its picture and its
+        // clip. It says no by default: the image is the definition, and a card
+        // without one is the word list this app was built to avoid.
+        if ($this->deck?->require_media ?? true) {
+            $required = array_unique(array_merge($required, $type->requiredMediaAttributes()));
+        }
+
+        foreach ($required as $attribute) {
             if (blank($this->{$attribute})) {
                 return false;
             }
         }
 
         return $type !== CardType::Cloze || $this->hasCloze();
+    }
+
+    /**
+     * Everything this note still needs before it can become a card.
+     *
+     * Drives the tray of unfinished sentences and the compose screen, so both
+     * agree with the scheduler about what "finished" means rather than
+     * re-deciding it themselves.
+     *
+     * @return array<int, string>
+     */
+    public function missingForCards(): array
+    {
+        $missing = [];
+
+        foreach ($this->deck->cardTypeEnums as $type) {
+            if ($this->supports($type)) {
+                // At least one card can be asked, so nothing is missing.
+                return [];
+            }
+
+            $required = array_merge(
+                $type->requiredNoteAttributes(),
+                ($this->deck?->require_media ?? true) ? $type->requiredMediaAttributes() : [],
+            );
+
+            foreach ($required as $attribute) {
+                if (blank($this->{$attribute})) {
+                    $missing[] = $attribute;
+                }
+            }
+
+            // A target that is present but does not appear in the sentence
+            // verbatim is missing in the only sense that matters: there is no
+            // blank to leave in the prompt.
+            if ($type === CardType::Cloze && filled($this->target) && ! $this->hasCloze()) {
+                $missing[] = 'target';
+            }
+        }
+
+        return array_values(array_unique($missing));
+    }
+
+    public function isComplete(): bool
+    {
+        return $this->missingForCards() === [];
     }
 
     /**

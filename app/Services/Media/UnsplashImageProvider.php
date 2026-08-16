@@ -4,16 +4,22 @@ namespace App\Services\Media;
 
 use App\Contracts\ImageProvider;
 use App\Exceptions\MediaFetchFailed;
+use App\Services\Media\Concerns\PicksFirstCandidate;
+use App\Services\Media\Concerns\RanksByRelevance;
 use App\Support\FoundImage;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class UnsplashImageProvider implements ImageProvider
 {
+    use PicksFirstCandidate;
+    use RanksByRelevance;
+
     private const SERVICE = 'Unsplash';
 
-    public function search(string $query): FoundImage
+    public function searchMany(string $query, int $limit = 6): Collection
     {
         $key = config('services.unsplash.key');
 
@@ -29,7 +35,7 @@ class UnsplashImageProvider implements ImageProvider
                 ->timeout((int) config('services.unsplash.timeout'))
                 ->get(rtrim(config('services.unsplash.base_url'), '/').'/search/photos', [
                     'query' => $query,
-                    'per_page' => 1,
+                    'per_page' => $limit,
                     // Cards are wider than they are tall, so a portrait shot
                     // would be cropped to nothing.
                     'orientation' => 'landscape',
@@ -40,19 +46,39 @@ class UnsplashImageProvider implements ImageProvider
         }
 
         if ($response->failed()) {
-            throw MediaFetchFailed::rejected(self::SERVICE, $response->status(), $response->body());
+            throw MediaFetchFailed::rejected(
+                self::SERVICE,
+                $response->status(),
+                $response->body(),
+                $response->header('Retry-After') ?: null,
+            );
         }
 
-        $result = data_get($response->json(), 'results.0');
+        $ranked = $this->rankByRelevance(
+            (array) data_get($response->json(), 'results', []),
+            $query,
+            fn (array $hit): ?string => trim(implode(' ', [
+                (string) data_get($hit, 'description'),
+                (string) data_get($hit, 'alt_description'),
+            ])),
+        );
 
-        if (! is_array($result)) {
-            throw MediaFetchFailed::nothingFound(self::SERVICE, $query);
-        }
+        return collect($ranked)
+            ->map(fn (array $hit): ?FoundImage => $this->toFoundImage($hit))
+            ->filter()
+            ->take($limit)
+            ->values();
+    }
 
+    /**
+     * @param  array<string, mixed>  $result
+     */
+    private function toFoundImage(array $result): ?FoundImage
+    {
         $url = data_get($result, 'urls.regular');
 
         if (! is_string($url) || $url === '') {
-            throw MediaFetchFailed::unusableAnswer(self::SERVICE, 'the result had no image URL');
+            return null;
         }
 
         return new FoundImage(
@@ -61,7 +87,8 @@ class UnsplashImageProvider implements ImageProvider
             photographerUrl: (string) (data_get($result, 'user.links.html') ?? 'https://unsplash.com'),
             source: 'unsplash',
             downloadTrackingUrl: data_get($result, 'links.download_location'),
-            description: data_get($result, 'alt_description'),
+            description: data_get($result, 'description') ?? data_get($result, 'alt_description'),
+            thumbnailUrl: data_get($result, 'urls.small'),
         );
     }
 

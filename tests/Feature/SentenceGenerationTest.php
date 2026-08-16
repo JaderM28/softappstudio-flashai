@@ -172,8 +172,15 @@ class SentenceGenerationTest extends TestCase
             return true;
         });
 
-        $this->assertStringContainsString('Write one natural', $instructions[0]);
-        $this->assertStringContainsString('pasted a sentence', $instructions[1]);
+        // Asserted on the distinction rather than the wording: the two tasks are
+        // genuinely different — one writes a sentence, the other keeps the
+        // user's own and picks the word out of it — and the prose around that
+        // gets tuned often.
+        $this->assertStringContainsString('Write one sentence that uses it', $instructions[0]);
+        $this->assertStringNotContainsString('Keep their wording', $instructions[0]);
+
+        $this->assertStringContainsString('Keep their wording', $instructions[1]);
+        $this->assertStringContainsString('met in the wild', $instructions[1]);
     }
 
     public function test_deck_instructions_are_folded_into_the_prompt(): void
@@ -496,4 +503,150 @@ class SentenceGenerationTest extends TestCase
             ->post(route('notes.generate'), ['input' => 'borrow', 'deck_id' => $othersDeck->id])
             ->assertSessionHasErrors('deck_id');
     }
+    // ------------------------------------------------- what the prompt asks for
+
+    /**
+     * The rule the whole design rests on, and the one nothing enforced before.
+     */
+    public function test_the_prompt_asks_for_exactly_one_new_thing_in_plain_language(): void
+    {
+        $this->geminiReturns($this->payload());
+
+        app(GeminiSentenceGenerator::class)->generate($this->generationRequest('borrowed'));
+
+        Http::assertSent(function ($request) {
+            $prompt = $request['system_instruction'];
+
+            return str_contains($prompt, 'exactly ONE thing this person does not already know')
+                && str_contains($prompt, 'most common words')
+                && str_contains($prompt, 'six to twelve words');
+        });
+    }
+
+    /**
+     * "Never give up on your dreams" is what the old prompt produced for a
+     * phrasal verb: a poster caption nobody says, teaching nothing about how
+     * the words behave.
+     */
+    public function test_the_prompt_rules_out_slogans_and_dictionary_examples(): void
+    {
+        $this->geminiReturns($this->payload());
+
+        app(GeminiSentenceGenerator::class)->generate($this->generationRequest('give up'));
+
+        Http::assertSent(function ($request) {
+            $prompt = $request['system_instruction'];
+
+            return str_contains($prompt, 'motivational line')
+                && str_contains($prompt, 'A moment, not a definition')
+                && str_contains($prompt, 'Contracted where a speaker would contract');
+        });
+    }
+
+    /**
+     * The point the user pushed back on: a level cage would stop them learning
+     * what they actually want. Only the surrounding words are constrained.
+     */
+    public function test_the_target_itself_is_never_simplified(): void
+    {
+        $this->geminiReturns($this->payload());
+
+        app(GeminiSentenceGenerator::class)->generate($this->generationRequest('serendipity'));
+
+        Http::assertSent(fn ($request) => str_contains($request['system_instruction'], 'The target itself is never simplified')
+            && str_contains($request['system_instruction'], 'exactly that word'));
+    }
+
+    public function test_expressions_are_asked_for_as_carefully_as_words(): void
+    {
+        $this->geminiReturns($this->payload());
+
+        app(GeminiSentenceGenerator::class)->generate($this->generationRequest('run into'));
+
+        Http::assertSent(function ($request) {
+            $prompt = $request['system_instruction'];
+
+            return str_contains($prompt, 'phrasal verb, an idiom or a collocation')
+                && str_contains($prompt, 'keep it whole');
+        });
+    }
+
+    // ------------------------------------------------------- what is known
+
+    /**
+     * Told to "prefer" the known words, the model wedged them in and produced
+     * "Don't give up on that coffee" — grammatical, and not something anyone
+     * would say. The list is a ceiling on unfamiliar vocabulary, never a palette.
+     */
+    public function test_known_words_are_offered_as_a_ceiling_not_a_palette(): void
+    {
+        $this->geminiReturns($this->payload());
+
+        app(GeminiSentenceGenerator::class)->generate(
+            $this->generationRequest('give up', ['umbrella', 'coffee', 'postman']),
+        );
+
+        Http::assertSent(function ($request) {
+            $prompt = $request['system_instruction'];
+
+            return str_contains($prompt, 'do not reach for them')
+                && str_contains($prompt, 'a natural sentence always wins')
+                && str_contains($prompt, 'umbrella, coffee, postman');
+        });
+    }
+
+    public function test_nothing_about_known_words_is_said_when_there_are_none(): void
+    {
+        $this->geminiReturns($this->payload());
+
+        app(GeminiSentenceGenerator::class)->generate($this->generationRequest('borrowed'));
+
+        Http::assertSent(fn ($request) => ! str_contains($request['system_instruction'], 'already studying'));
+    }
+
+    /**
+     * The known words shape the answer, so they are part of the question. Without
+     * this, one learner's sentence is handed to another whose vocabulary it was
+     * never built around.
+     */
+    public function test_the_cache_can_tell_two_learners_apart(): void
+    {
+        $bare = $this->generationRequest('give up');
+        $withContext = $this->generationRequest('give up', ['umbrella', 'coffee']);
+
+        $this->assertNotSame($bare->fingerprint(), $withContext->fingerprint());
+
+        $this->assertSame(
+            $withContext->fingerprint(),
+            $this->generationRequest('give up', ['umbrella', 'coffee'])->fingerprint(),
+        );
+    }
+
+    /**
+     * @param  array<int, string>  $knownWords
+     */
+    private function generationRequest(string $input, array $knownWords = []): \App\Support\GenerationRequest
+    {
+        return \App\Support\GenerationRequest::forDeck(
+            $input,
+            new \App\Models\Deck(['target_language' => 'en', 'native_language' => 'es']),
+            $knownWords,
+        );
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function payload(): array
+    {
+        return [
+            'sentence' => 'She borrowed my umbrella yesterday.',
+            'target' => 'borrowed',
+            'target_lemma' => 'borrow',
+            'meaning' => 'took and gave back',
+            'translation' => 'Ayer me pidio prestado el paraguas.',
+            'image_query' => 'umbrella rain street',
+        ];
+    }
+
 }

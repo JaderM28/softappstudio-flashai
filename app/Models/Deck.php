@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'prompt_instructions',
     'card_types',
     'show_translation',
+    'require_media',
     'new_per_day',
     'reviews_per_day',
 ])]
@@ -38,6 +39,7 @@ class Deck extends Model
         'target_language' => 'en',
         'native_language' => 'es',
         'show_translation' => true,
+        'require_media' => true,
         'is_default' => false,
     ];
 
@@ -49,6 +51,7 @@ class Deck extends Model
         return [
             'card_types' => 'array',
             'show_translation' => 'boolean',
+            'require_media' => 'boolean',
             'is_default' => 'boolean',
             'new_per_day' => 'integer',
             'reviews_per_day' => 'integer',

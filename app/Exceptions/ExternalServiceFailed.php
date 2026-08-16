@@ -2,6 +2,7 @@
 
 namespace App\Exceptions;
 
+use App\Enums\FailureReason;
 use RuntimeException;
 
 /**
@@ -12,14 +13,52 @@ use RuntimeException;
  */
 abstract class ExternalServiceFailed extends RuntimeException
 {
-    public function __construct(string $message, private readonly string $userMessage = '')
-    {
+    public function __construct(
+        string $message,
+        private readonly string $userMessage = '',
+        /**
+         * What went wrong, as a fact rather than as prose. Retry decisions are
+         * made from this and from the status below — never from the message,
+         * which carries the provider's own words.
+         */
+        public readonly FailureReason $reason = FailureReason::Unusable,
+        public readonly ?int $status = null,
+        /**
+         * How long the service asked us to wait, when it said.
+         *
+         * Worth having because the guess is so much worse than the answer:
+         * Gemini's speech tier replies to a 429 with "Please retry in 15.5s",
+         * and the fixed five-minute backoff this app used to apply ignored it —
+         * turning a quarter-minute pause into a card that took twenty times
+         * longer to finish than it needed to.
+         */
+        public readonly ?int $retryAfterSeconds = null,
+    ) {
         parent::__construct($message);
     }
 
     public function userMessage(): string
     {
         return $this->userMessage !== '' ? $this->userMessage : $this->getMessage();
+    }
+
+    /**
+     * Dig the wait out of whatever the service said.
+     *
+     * Both shapes are real: a `Retry-After` header is the standard one, and
+     * Google puts a sentence in the error body instead.
+     */
+    protected static function retryAfterFrom(string $body, ?string $header = null): ?int
+    {
+        if ($header !== null && is_numeric(trim($header))) {
+            return max(1, (int) ceil((float) trim($header)));
+        }
+
+        if (preg_match('/retry in ([\d.]+)s/i', $body, $matches) === 1) {
+            return max(1, (int) ceil((float) $matches[1]));
+        }
+
+        return null;
     }
 
     /**

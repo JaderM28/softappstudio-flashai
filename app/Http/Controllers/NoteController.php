@@ -45,7 +45,10 @@ class NoteController extends Controller
 
     public function index(Request $request): View
     {
-        $notes = $request->user()->notes()
+        $user = $request->user();
+        $status = $request->string('status')->toString();
+
+        $notes = $user->notes()
             ->with(['deck', 'cards'])
             ->when($request->string('q')->isNotEmpty(), function ($query) use ($request) {
                 $term = '%'.$request->string('q')->trim().'%';
@@ -55,6 +58,12 @@ class NoteController extends Controller
                     ->orWhere('target', 'ilike', $term)
                     ->orWhere('meaning', 'ilike', $term));
             })
+            // The tray. A sentence whose picture or clip never arrived is not
+            // lost and not broken — it is waiting for a decision, and it has to
+            // be findable or the promise that nothing is ever thrown away is
+            // only true in the database.
+            ->when($status === 'incomplete', fn ($query) => $query->doesntHave('cards'))
+            ->when($status === 'ready', fn ($query) => $query->has('cards'))
             ->latest()
             ->paginate(20)
             ->withQueryString();
@@ -62,6 +71,8 @@ class NoteController extends Controller
         return view('notes.index', [
             'notes' => $notes,
             'query' => $request->string('q')->toString(),
+            'status' => $status,
+            'unfinished' => $user->notes()->doesntHave('cards')->count(),
         ]);
     }
 
@@ -84,13 +95,13 @@ class NoteController extends Controller
 
         $note = $this->createNote->handle($user, $deck, $request->safe()->except('deck_id'));
 
-        $message = $note->cards()->count() === 0
-            ? 'Sentence saved, but no card could be built from it yet — check that the word appears in the sentence.'
-            : 'Sentence saved.';
-
+        // The sentence is saved; the card is not made yet. Straight to the
+        // screen where its picture and its clip turn up and get approved,
+        // because a card whose media nobody looked at is the problem this whole
+        // flow exists to fix.
         return redirect()
-            ->route('notes.create', ['deck' => $deck->id])
-            ->with('status', $message);
+            ->route('notes.compose', $note)
+            ->with('status', __('Sentence saved. Finding its picture and recording it now.'));
     }
 
     public function edit(Note $note): View

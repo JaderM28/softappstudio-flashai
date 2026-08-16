@@ -16,11 +16,46 @@
 
             <x-flash-status />
 
-            <form method="GET" action="{{ route('notes.index') }}">
+            <form method="GET" action="{{ route('notes.index') }}" class="space-y-3">
                 <x-text-input name="q" type="search" :value="$query"
                               placeholder="{{ __('Search sentences, words or meanings') }}"
                               class="block w-full" />
+
+                @php
+                    $tabs = [
+                        '' => __('All'),
+                        'ready' => __('Studying'),
+                        'incomplete' => __('Unfinished'),
+                    ];
+                @endphp
+
+                <div class="flex flex-wrap items-center gap-2 text-sm">
+                    @foreach ($tabs as $value => $label)
+                        <a href="{{ route('notes.index', array_filter(['q' => $query, 'status' => $value])) }}"
+                           class="px-3 py-1 rounded-full transition {{ $status === $value
+                               ? 'bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-800'
+                               : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
+                            {{ $label }}
+                            @if ($value === 'incomplete' && $unfinished > 0)
+                                <span class="ms-1 tabular-nums">{{ $unfinished }}</span>
+                            @endif
+                        </a>
+                    @endforeach
+                </div>
             </form>
+
+            @if ($unfinished > 0 && $status !== 'incomplete')
+                <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+                    {{ trans_choice(
+                        '{1} One sentence is still waiting for its picture or its audio.|[2,*] :count sentences are still waiting for their picture or audio.',
+                        $unfinished,
+                        ['count' => $unfinished],
+                    ) }}
+                    <a href="{{ route('notes.index', ['status' => 'incomplete']) }}" class="underline font-medium">
+                        {{ __('Finish them') }}
+                    </a>
+                </div>
+            @endif
 
             <div class="bg-white dark:bg-gray-800 shadow-xs sm:rounded-lg divide-y divide-gray-100 dark:divide-gray-700">
                 @forelse ($notes as $note)
@@ -44,9 +79,10 @@
                                         </span>
                                     @endforeach
                                     @if ($note->cards->isEmpty())
-                                        <span class="text-amber-600 dark:text-amber-500">
-                                            {{ __('No cards yet') }}
-                                        </span>
+                                        <a href="{{ route('notes.compose', $note) }}"
+                                           class="font-medium text-amber-600 dark:text-amber-500 hover:underline">
+                                            {{ __('Finish this card') }}
+                                        </a>
                                     @endif
                                     <x-asset-status :note="$note" />
                                 </p>

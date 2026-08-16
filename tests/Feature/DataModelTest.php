@@ -194,12 +194,17 @@ class DataModelTest extends TestCase
 
     // ------------------------------------------------------- note supports type
 
-    public function test_a_note_without_audio_cannot_support_a_listening_card(): void
+    /**
+     * Audio is the one requirement that is not a preference: a listening card
+     * with nothing to listen to cannot be asked at all.
+     */
+    public function test_a_note_without_audio_supports_nothing(): void
     {
         $note = Note::factory()->withoutAudio()->create();
 
-        $this->assertTrue($note->supports(CardType::Cloze));
+        $this->assertFalse($note->supports(CardType::Cloze));
         $this->assertFalse($note->supports(CardType::Listening));
+        $this->assertContains('audio_sentence_path', $note->missingForCards());
     }
 
     public function test_a_note_whose_target_is_missing_cannot_support_a_cloze_card(): void
@@ -210,14 +215,31 @@ class DataModelTest extends TestCase
         $this->assertTrue($note->supports(CardType::Listening));
     }
 
-    public function test_a_note_without_an_image_still_supports_every_card_type(): void
+    /**
+     * This reverses the old rule, deliberately. The picture is the definition —
+     * it is the entire argument for this app over a word list — so a sentence
+     * without one is unfinished rather than studiable.
+     */
+    public function test_a_note_without_an_image_supports_no_card_type(): void
     {
-        // The picture helps, but a sentence with audio is entirely studiable
-        // without it — that is the whole reason image status is tracked apart.
         $note = Note::factory()->withoutImage()->create();
 
+        $this->assertFalse($note->supports(CardType::Cloze));
+        $this->assertFalse($note->supports(CardType::Listening));
+        $this->assertSame(['image_path'], $note->missingForCards());
+        $this->assertFalse($note->isComplete());
+    }
+
+    /**
+     * And the escape hatch, for a deck that knowingly wants plain text.
+     */
+    public function test_a_deck_may_opt_out_of_requiring_media(): void
+    {
+        $deck = Deck::factory()->create(['require_media' => false]);
+        $note = Note::factory()->inDeck($deck)->withoutImage()->create();
+
         $this->assertTrue($note->supports(CardType::Cloze));
-        $this->assertTrue($note->supports(CardType::Listening));
+        $this->assertTrue($note->isComplete());
     }
 
     // ---------------------------------------------------------------- cards

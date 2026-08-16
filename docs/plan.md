@@ -16,6 +16,8 @@ The first draft built flashcards around **words**. This one builds them around *
 | 08 | [Screens](#08--screens) |
 | 09 | [What already exists](#09--what-already-exists) |
 | 10 | [Build order](#10--build-order) |
+| 11 | [The compose step](#11--the-compose-step) |
+| 12 | [Tapping a word to hear it](#12--tapping-a-word-to-hear-it) |
 
 ---
 
@@ -111,7 +113,9 @@ Because otherwise the image, the audio and the text exist in two or three copies
 
 > **Why three status columns instead of one**
 >
-> Three external services are involved and they fail independently — image search rate-limits far sooner than the rest, and the audio model is a preview one. A note with text and audio but no image is perfectly studiable; a single global status forces you to treat it as broken, and one flaky API takes the whole note down with it.
+> Three external services are involved and they fail independently — image search rate-limits far sooner than the rest, and the audio model is a preview one. A note needs to be able to say *which half* it is still waiting on, and one global flag cannot; it also has to keep the half that arrived rather than throwing it away with the half that did not.
+>
+> **Revised, August 2026.** This section used to end "a note with text and audio but no image is perfectly studiable". That is no longer the rule. **No card is created without both its picture and its audio** — the image is the definition, which is the entire argument for this app over a word list, and a card without one teaches the English-to-Spanish lookup the design exists to avoid. A sentence whose media has not arrived is saved as a draft and waits in a tray with three ways out: retry, rewrite the scene and search again, or upload a picture of your own. `decks.require_media` turns the rule off for a deck that knowingly wants plain text. See §11.
 
 #### cards
 
@@ -390,3 +394,80 @@ Four commits are in. Nothing is deployed and no real cards exist, so restructuri
 > **Deliberately not in this version**
 >
 > Offline review with sync, Anki import/export, shared decks, speech recognition, push notifications, and FSRS. The review log is being kept in a shape that lets FSRS arrive later without a migration — it needs the history this design is already recording.
+
+---
+
+## 11 · The compose step
+
+### Added August 2026, and it changes what §03 and §08 promised
+
+The app shipped with a gap big enough to hide its own premise in. Saving a sentence created its card immediately, and the picture and the audio were fetched afterwards — or not at all. Nothing checked. In practice **no audio was ever produced**: the speech client read the clip from a field the live API does not use, every test faked the same wrong shape, and the suite stayed green for weeks.
+
+So the media stopped being an afterthought and became the gate.
+
+| | Before | Now |
+|---|---|---|
+| `POST /notes` | Saves the sentence **and creates the card** | Saves the sentence as a **draft** and queues its media |
+| When media arrives | The listening card quietly appears | Nothing. The screen updates and waits for a person |
+| Picture chosen | `hits[0]`, unseen | Six candidates, ranked, **you pick** |
+| Media fails | Card exists anyway, without them | Draft waits in a tray with three ways out |
+
+**The screen** is `GET /notes/{note}/compose`. The sentence sits at the top, already saved and safe from anything that happens below it. Under it: the picture with a grid of candidates and a box to rewrite the scene; the audio with a player; and one button, disabled until both exist, that creates the cards.
+
+It polls a JSON endpoint every two seconds and stops the moment nothing is expected to change on its own. Generation is not synchronous because the speech tier answers in single-digit requests a minute — measured, not assumed: `limit: 10, model: gemini-3.1-flash-tts`, with a `Please retry in 38s` — and `fastcgi_read_timeout` is 90 seconds.
+
+#### Why choosing beats searching harder
+
+Measured against Pixabay with three real queries, four of every five results were relevant and **the top hit was wrong twice**. Searching for the whole sentence *"She borrowed my umbrella yesterday."* leads with a Christmas dinner table; searching `umbrella rain street` leads with a night shot of Osaka that carries `rain` and `umbrella` at the end of twenty tags. Stock libraries rank by popularity, not by fit.
+
+Two fixes came out of that, and both are in:
+
+- **`RanksByRelevance`** scores candidates by tag overlap with the query and keeps the provider's order only as a tie-breaker. It fixes both cases above without an extra request or a model.
+- **`ImageQuery`** never searches the raw sentence. The scene from the generator if there is one; otherwise the target plus two content words, grammar stripped.
+
+Ranking improves which picture is chosen *for* you. It cannot make "exact" mean anything, because exact is a judgement — hence the grid, the rewrite box, and the upload.
+
+#### Nothing is ever a dead end
+
+The sentence you typed is saved before any external service is called, and no failure below can take it back. A draft that never got its media shows in **Sentences → Unfinished** with a count in the tab, and from there: retry the half that failed, rewrite the scene and search again, or upload your own picture — resized to 640px with the ffmpeg that is already in the image for the audio.
+
+---
+
+## 12 · Tapping a word to hear it
+
+### Both are built
+
+Two ways to let someone tap any word in a sentence and hear it. Both were tried against the live services; the numbers below are measured, not estimated.
+
+**A · One clip per word, cached.** Tap `coffee`, synthesise `coffee`, play it. About **10 neurons** for a seven-letter word, and paid **once ever** — the same word recurs across every card that contains it, so a stored clip keyed by word, language and voice is reused indefinitely. Gives the citation form: clean, isolated, dictionary-like. The app already does exactly this for the target word (`audio_target_path`); extending it to any word is the same code with a different key.
+
+**B · Slice the sentence clip that already exists.** Cloudflare's Whisper returns per-word timings for audio we already generated, at **1.83 neurons per note, once**:
+
+| Word | Start | End |
+|---|---|---|
+| The | 0.00s | 0.30s |
+| waiter | 0.30s | 0.52s |
+| spilled | 0.52s | 0.88s |
+| coffee | 0.88s | 1.24s |
+
+Store the timings on the note and tapping a word costs **nothing and waits for nothing** — `audio.currentTime = 0.52`, stop at `0.88`. No files are cut. And the word sounds the way it is actually said *in that sentence*, with the elisions and stress of connected speech, which is a different and often more useful thing to learn than the isolated form.
+
+> **The catch, found by running it — and the fix, also found by running it**
+>
+> Whisper transcribed *"tablecloth"* as *"table cup"*: eight words where the sentence has seven. Mapped by position, tapping *tablecloth* would have played the sound of *cup* — a card teaching a pronunciation that is simply wrong, which is worse than no feature at all.
+>
+> Passing the sentence as `initial_prompt` fixes it outright. Measured on the same clip: **8 words without it, 7 with it**, transcribed exactly. `AlignWordTimings` then checks the transcript against the sentence word for word and **throws away the whole set** on any disagreement — wrong count, wrong word, timings that run backwards or overlap. There is no partial acceptance. An empty result simply falls back to A, which always works.
+
+**Both, eventually.** A short tap plays the slice; the isolated clip is the fallback when alignment failed or the citation form is what is wanted.
+
+> **What is in**
+>
+> Both, end to end. Tapping a word plays that stretch of the sentence clip — verified in the browser on the word *spilled*: it seeks the existing `9-sentence.mp3` to 0.52s, stops at the end of the word, and makes **no network request at all**. `TimeNoteWords` runs after the audio is stored and is best effort by construction: a failed or disagreeing transcript leaves the clip, the note and the card exactly as they were, with no timings and the per-word path taking over.
+>
+> Approach A, also end to end: `SpeakWord` stores by word, language and voice, `POST /speak` serves it, and `<x-spoken-sentence>` renders every word of a revealed sentence as something tappable. Measured in the browser: **1,026 ms** the first time a word is asked for, **45 ms** every time after. The voice is part of the storage key, so changing it never leaves a learner hearing the sentence in one voice and its words in another.
+>
+> The rule that governs where it may appear: **only after the answer is revealed**. A tappable word in the blanked prompt would read the answer aloud, which is the one thing a flashcard must not do. There is a test asserting the prompt is plain text.
+
+> **Worth weighing before building it**
+>
+> Tapping every word is absorbing in a way that works against the session limits in [05](#05--session-rules). A ten-minute review becomes forty, and the daily cap that exists to keep this sustainable stops meaning anything. Whatever this becomes, it should not turn a review into a reading session.

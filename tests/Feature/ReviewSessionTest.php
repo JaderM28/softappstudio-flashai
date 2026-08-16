@@ -10,7 +10,13 @@ use App\Models\CardReview;
 use App\Models\Deck;
 use App\Models\Note;
 use App\Models\User;
+use App\Contracts\ImageProvider;
+use App\Contracts\SpeechSynthesizer;
+use App\Services\Media\FakeImageProvider;
+use App\Services\Media\FakeSpeechSynthesizer;
 use App\Services\ReviewQueue;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -236,9 +242,26 @@ class ReviewSessionTest extends TestCase
      * The whole loop, end to end: add a sentence, review it through the
      * learning steps, and watch it graduate.
      */
-    public function test_a_sentence_can_be_added_and_studied_to_graduation(): void
+    /**
+     * The whole journey, end to end: type a sentence, watch its picture and
+     * clip arrive, approve them, and study the card to graduation.
+     *
+     * The approval step is the part worth guarding. Before it existed, saving
+     * a sentence produced a card immediately — with no picture and no audio —
+     * and this test passed just the same, which is precisely how the app came
+     * to be full of cards missing the two things it is built around.
+     */
+    public function test_a_sentence_becomes_a_card_only_after_its_media_is_approved(): void
     {
         $user = User::factory()->create();
+
+        // The services, stood in for. The point here is the journey, not the
+        // clients — MediaProviderTest exercises those against recorded replies.
+        $this->app->instance(ImageProvider::class, new FakeImageProvider);
+        $this->app->instance(SpeechSynthesizer::class, new FakeSpeechSynthesizer);
+        Storage::fake(config('flashai.media.disk'));
+        Http::fake(fn () => Http::response('jpeg-bytes', 200, ['Content-Type' => 'image/jpeg']));
+        config(['services.pixabay.key' => 'test-key', 'services.gemini.key' => 'test-key']);
 
         $this->actingAs($user)->post(route('notes.store'), [
             'sentence' => 'She borrowed my umbrella yesterday.',
@@ -246,7 +269,28 @@ class ReviewSessionTest extends TestCase
             'meaning' => 'took something to use and give back later',
         ]);
 
-        $card = Card::query()->sole();
+        $note = Note::query()->sole();
+
+        // Saved, and not yet a card.
+        $this->assertSame(0, $note->cards()->count());
+
+        // QUEUE_CONNECTION is sync here, so the media jobs have already run.
+        $note->refresh();
+        $this->assertTrue($note->isComplete());
+        $this->assertNotNull($note->image_path);
+        $this->assertNotNull($note->audio_sentence_path);
+
+        // Nothing to study until somebody has looked at it and pressed the
+        // button, which is the entire point of the compose screen.
+        $this->assertNull(app(ReviewQueue::class)->nextCard($user));
+
+        $this->actingAs($user)->get(route('notes.compose', $note))->assertOk();
+        $this->actingAs($user)->post(route('notes.complete', $note))->assertRedirect();
+
+        $this->assertSame(2, $note->fresh()->cards()->count());
+
+        // And from here the scheduler behaves as it always did.
+        $card = Card::query()->where('type', CardType::Cloze)->sole();
 
         $this->actingAs($user)->get(route('review.show'))->assertOk();
         $this->actingAs($user)->post(route('review.grade', $card), ['grade' => ReviewGrade::Good->value]);
@@ -261,6 +305,5 @@ class ReviewSessionTest extends TestCase
         $card->refresh();
         $this->assertSame(CardQueue::Review, $card->queue);
         $this->assertSame(1, $card->interval_days);
-        $this->assertNull(app(ReviewQueue::class)->nextCard($user));
     }
 }

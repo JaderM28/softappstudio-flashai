@@ -2,18 +2,16 @@
 
 namespace App\Jobs;
 
-use App\Contracts\ImageProvider;
+use App\Actions\StoreNoteImage;
 use App\Enums\AssetStatus;
 use App\Exceptions\MediaFetchFailed;
 use App\Models\Note;
-use App\Support\FoundImage;
+use App\Services\Media\ImageCandidates;
+use App\Support\ImageQuery;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Queue\Middleware\RateLimited;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * Finds the picture for a note and stores a copy of it.
@@ -35,7 +33,22 @@ class FetchNoteImage implements ShouldQueue
 {
     use Queueable;
 
-    public int $tries = 5;
+    /**
+     * Attempts are counted generously and bounded by the clock instead.
+     *
+     * A small count was wrong for both reasons a media job fails. Honouring
+     * the provider's "retry in 56s" means a handful of attempts can be spent
+     * inside a single minute — the old three were gone before the quota window
+     * had even reopened — while a genuinely broken key deserves to stop long
+     * before twenty-five tries. retryUntil() is what draws that line: keep
+     * trying for a few hours, then leave it in the tray for a person.
+     */
+    public int $tries = 25;
+
+    public function retryUntil(): \DateTimeInterface
+    {
+        return now()->addHours(6);
+    }
 
     public function __construct(
         public readonly Note $note,
@@ -46,13 +59,18 @@ class FetchNoteImage implements ShouldQueue
      */
     public function middleware(): array
     {
-        // When the limiter is out of room the job goes back on the queue rather
-        // than burning an attempt, so a big batch drains slowly instead of
-        // half-failing.
-        return [(new RateLimited('images'))->dontRelease()];
+        // Without dontRelease(), a job that finds the limiter full is put back
+        // on the queue to be tried when it reopens. With it, the job is thrown
+        // away silently — which is what this used to do, directly against what
+        // the comment here claimed, so a batch large enough to hit the limit
+        // lost every note past the ceiling and reported nothing.
+        //
+        // Releasing costs an attempt, which is why $tries is 25 and bounded by
+        // retryUntil() rather than by a small count.
+        return [new RateLimited('images')];
     }
 
-    public function handle(ImageProvider $images): void
+    public function handle(ImageCandidates $candidates, StoreNoteImage $store): void
     {
         $note = $this->note->fresh();
 
@@ -60,7 +78,9 @@ class FetchNoteImage implements ShouldQueue
             return;
         }
 
-        $query = $note->image_query ?: $note->sentence;
+        // Never the raw sentence: stock libraries search tags, and a sentence
+        // is mostly words nothing is tagged with. See ImageQuery.
+        $query = ImageQuery::forNote($note->image_query, $note->sentence, $note->target);
 
         if (blank($query)) {
             return;
@@ -69,81 +89,20 @@ class FetchNoteImage implements ShouldQueue
         $note->update(['image_status' => AssetStatus::Processing]);
 
         try {
-            $found = $images->search($query);
+            // The whole grid is fetched and remembered, not just the winner:
+            // the same one request answers "show me a picture" and "show me the
+            // others", so changing your mind on the compose screen is free.
+            $found = $candidates->refresh($note, $query);
+
+            $store->handle(
+                $note,
+                $found->first() ?? throw MediaFetchFailed::nothingFound('No image provider', $query),
+            );
         } catch (MediaFetchFailed $e) {
             $this->recordFailure($note, $e);
-
-            return;
         }
-
-        $images->reportUsage($found);
-
-        try {
-            $path = $this->store($note, $found);
-        } catch (MediaFetchFailed $e) {
-            $this->recordFailure($note, $e);
-
-            return;
-        }
-
-        $note->update([
-            'image_status' => AssetStatus::Ready,
-            'image_path' => $path,
-            // Kept beside the copy: it is where the credit on the card links
-            // back to, and it is what a refetch would compare against.
-            'image_url' => $found->url,
-            'image_attribution' => $found->attribution(),
-            'generation_errors' => $this->withoutError($note, 'image'),
-        ]);
     }
 
-    /**
-     * @throws MediaFetchFailed
-     */
-    private function store(Note $note, FoundImage $found): string
-    {
-        try {
-            $response = Http::timeout(20)->get($found->url);
-        } catch (ConnectionException $e) {
-            throw MediaFetchFailed::unreachable($found->source, $e->getMessage());
-        }
-
-        if ($response->failed()) {
-            throw MediaFetchFailed::rejected($found->source, $response->status(), '');
-        }
-
-        $bytes = $response->body();
-
-        if ($bytes === '') {
-            throw MediaFetchFailed::unusableAnswer($found->source, 'the picture downloaded as an empty file');
-        }
-
-        $path = "notes/images/{$note->id}.".$this->extensionFor($response->header('Content-Type'), $found->url);
-
-        Storage::disk(config('flashai.media.disk'))->put($path, $bytes);
-
-        return $path;
-    }
-
-    /**
-     * The content type is what the server actually sent; the URL is a guess for
-     * when it sent nothing useful. JPEG is the last resort because every one of
-     * these libraries serves mostly JPEG.
-     */
-    private function extensionFor(?string $contentType, string $url): string
-    {
-        $known = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif'];
-
-        foreach ($known as $type => $extension) {
-            if ($contentType !== null && str_contains(mb_strtolower($contentType), $type)) {
-                return $extension;
-            }
-        }
-
-        $fromUrl = mb_strtolower(pathinfo(parse_url($url, PHP_URL_PATH) ?? '', PATHINFO_EXTENSION));
-
-        return in_array($fromUrl, $known, true) ? $fromUrl : 'jpg';
-    }
 
     private function recordFailure(Note $note, MediaFetchFailed $e): void
     {
@@ -157,7 +116,7 @@ class FetchNoteImage implements ShouldQueue
         if ($e->isWorthRetrying() && $this->attempts() < $this->tries) {
             $note->update(['image_status' => AssetStatus::Pending]);
 
-            $this->release(now()->addMinutes(10));
+            $this->release($this->retryDelay($e));
 
             return;
         }
@@ -182,4 +141,26 @@ class FetchNoteImage implements ShouldQueue
 
         return $errors === [] ? null : $errors;
     }
+
+    /**
+     * How long to wait before the next attempt.
+     *
+     * The provider's own answer wins when it gives one — a 429 from Gemini
+     * speech carries "Please retry in 15.5s", and waiting five minutes on top
+     * of that is time spent for nothing. Otherwise it climbs, because a service
+     * that is down does not want to be asked every minute.
+     *
+     * The jitter matters more than it looks: five notes added together would
+     * otherwise retry in the same second and hit the same limit again.
+     */
+    private function retryDelay(MediaFetchFailed $e): int
+    {
+        $steps = [60, 300, 900, 1800, 3600];
+
+        $base = $e->retryAfterSeconds
+            ?? ($steps[max(0, $this->attempts() - 1)] ?? end($steps));
+
+        return random_int((int) ceil($base * 0.9), (int) ceil($base * 1.3));
+    }
+
 }

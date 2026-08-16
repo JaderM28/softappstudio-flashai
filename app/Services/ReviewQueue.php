@@ -48,16 +48,17 @@ class ReviewQueue
     {
         $at ??= now();
 
-        $raw = $this->baseQuery($user, $deck, $at)
-            ->selectRaw('queue, count(*) as total')
-            ->groupBy('queue')
-            ->pluck('total', 'queue')
-            ->all();
-
         $counts = [];
 
+        // Counted per queue rather than in one grouped query, because the
+        // learning queues are allowed to look further ahead than the rest. A
+        // shared horizon would have the counter read zero while the session was
+        // still handing out cards.
         foreach (CardQueue::sessionOrder() as $queue) {
-            $counts[$queue->value] = (int) ($raw[$queue->value] ?? 0);
+            $counts[$queue->value] = $this
+                ->baseQuery($user, $deck, $this->horizonFor($queue, $at))
+                ->where('queue', $queue->value)
+                ->count();
         }
 
         $counts[CardQueue::Review->value] = min(
@@ -76,6 +77,56 @@ class ReviewQueue
     public function dueCount(User $user, ?Deck $deck = null, ?Carbon $at = null): int
     {
         return array_sum($this->counts($user, $deck, $at));
+    }
+
+    /**
+     * When the next card falls due, if one is coming.
+     *
+     * The session screen needs this to tell "you are finished" apart from
+     * "come back in seven minutes" — two states that used to look identical
+     * and mean very different things.
+     */
+    public function nextDueAt(User $user, ?Deck $deck = null, ?Carbon $at = null): ?Carbon
+    {
+        $at ??= now();
+
+        $next = Card::query()
+            ->where('user_id', $user->id)
+            ->when($deck !== null, fn (Builder $query) => $query->where('deck_id', $deck->id))
+            ->whereIn('queue', [CardQueue::Learning->value, CardQueue::Relearning->value, CardQueue::Review->value])
+            ->where('next_review_at', '>', $at)
+            ->where(fn (Builder $sub) => $sub
+                ->whereNull('buried_until')
+                ->orWhere('buried_until', '<=', $at))
+            ->min('next_review_at');
+
+        return $next === null ? null : Carbon::parse($next);
+    }
+
+    /**
+     * Cards that exist, are due, and are being held back only by today's
+     * allowance.
+     *
+     * Without this the daily cap is invisible: the session simply stops, and
+     * "you have done your quota, thirty-four are waiting for tomorrow" reads
+     * exactly like "there is nothing left to study".
+     */
+    public function heldBackByTodaysCap(User $user, ?Deck $deck = null, ?Carbon $at = null): int
+    {
+        $at ??= now();
+
+        $reviews = $this->baseQuery($user, $deck, $at)
+            ->where('queue', CardQueue::Review->value)
+            ->count();
+
+        $newCards = $this->baseQuery($user, $deck, $at)
+            ->where('queue', CardQueue::New->value)
+            ->count();
+
+        $counts = $this->counts($user, $deck, $at);
+
+        return max(0, $reviews - $counts[CardQueue::Review->value])
+            + max(0, $newCards - $counts[CardQueue::New->value]);
     }
 
     /**
@@ -143,9 +194,33 @@ class ReviewQueue
         }
 
         return $this->firstAnswerable(
-            $this->baseQuery($user, $deck, $at)->where('queue', $queue->value),
+            $this->baseQuery($user, $deck, $this->horizonFor($queue, $at))->where('queue', $queue->value),
             $queue,
         );
+    }
+
+    /**
+     * How far ahead this queue is allowed to look.
+     *
+     * Anki's learn-ahead limit, and the reason it exists is worth stating: a
+     * learning step is minutes long, so on a small collection every "Again" or
+     * "Hard" empties the session for ten minutes and the screen says there is
+     * nothing left to study. The card was never lost; it simply was not due
+     * yet, and the session had no way to say so.
+     *
+     * Reviews never move. Their intervals are measured in days and are the
+     * whole point of the algorithm — bringing them forward would make them
+     * mean nothing.
+     */
+    private function horizonFor(CardQueue $queue, Carbon $at): Carbon
+    {
+        if (! $queue->isIntraday()) {
+            return $at;
+        }
+
+        $minutes = (int) config('flashai.session.learn_ahead_minutes');
+
+        return $minutes > 0 ? $at->copy()->addMinutes($minutes) : $at;
     }
 
     /**

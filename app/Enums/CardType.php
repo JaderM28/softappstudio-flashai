@@ -52,4 +52,29 @@ enum CardType: string
             self::Production => ['sentence', 'meaning'],
         };
     }
+
+    /**
+     * What a card additionally needs before it is worth studying at all.
+     *
+     * The picture is the definition — that is the whole argument for this app
+     * over a word list — and the audio is what teaches the word's shape in the
+     * ear rather than only on the page. A cloze card can technically be asked
+     * without either; it is just a worse flashcard than the one the deck was
+     * created to produce, so decks require both by default.
+     *
+     * Kept apart from requiredNoteAttributes() because these are a deck's
+     * policy and those are the question's mechanics: a listening card without
+     * audio cannot be asked at all, whatever anyone prefers.
+     *
+     * @return array<int, string>
+     */
+    public function requiredMediaAttributes(): array
+    {
+        return match ($this) {
+            self::Cloze, self::Production => ['image_path', 'audio_sentence_path'],
+            // Its own mechanics already demand the audio, and a listening card
+            // reveals with the picture rather than asking with it.
+            self::Listening => ['image_path'],
+        };
+    }
 }

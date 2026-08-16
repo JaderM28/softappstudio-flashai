@@ -30,6 +30,43 @@ class Scheduler
      */
     private const FUZZ_MINIMUM_DAYS = 3;
 
+    /**
+     * Whether the jitter is applied. Off only while previewing.
+     */
+    private bool $fuzz = true;
+
+    /**
+     * What each button would do, so the four of them can say so.
+     *
+     * Anki shows the interval on every button, and it is not decoration: "Hard"
+     * and "Good" are a choice between two futures, and choosing blind is how a
+     * card ends up years out because a tap landed one button to the right.
+     *
+     * Computed with the jitter off. It is ±5% of a number the user is reading
+     * as a label, and a preview that disagreed with what actually happened
+     * would be worse than no preview at all. Running the real grade() rather
+     * than reimplementing the arithmetic is the point — a second copy would
+     * drift from the first the day either changed.
+     *
+     * @return array<int, SchedulingState> keyed by ReviewGrade->value
+     */
+    public function previewAll(SchedulingState $state, ?Carbon $now = null): array
+    {
+        $this->fuzz = false;
+
+        try {
+            $previews = [];
+
+            foreach (ReviewGrade::cases() as $grade) {
+                $previews[$grade->value] = $this->grade($state, $grade, $now);
+            }
+
+            return $previews;
+        } finally {
+            $this->fuzz = true;
+        }
+    }
+
     public function grade(SchedulingState $state, ReviewGrade $grade, ?Carbon $now = null): SchedulingState
     {
         $now ??= now();
@@ -231,7 +268,7 @@ class Scheduler
     {
         $percent = (int) config('flashai.scheduler.fuzz_percent');
 
-        if ($percent <= 0 || $days < self::FUZZ_MINIMUM_DAYS) {
+        if (! $this->fuzz || $percent <= 0 || $days < self::FUZZ_MINIMUM_DAYS) {
             return $days;
         }
 

@@ -1,0 +1,218 @@
+{
+    "result_count": 240,
+    "page_count": 80,
+    "page_size": 3,
+    "page": 1,
+    "results": [
+        {
+            "id": "9da92ba9-2558-46e0-89d4-aca160f54f7e",
+            "title": "Umbrellas in the rain, Jun 2009 - 31",
+            "indexed_on": "2018-11-08T01:45:17.652714Z",
+            "foreign_landing_url": "https://www.flickr.com/photos/72098626@N00/3645952026",
+            "url": "https://live.staticflickr.com/3411/3645952026_dffa8d5f61_b.jpg",
+            "creator": "Ed Yourdon",
+            "creator_url": "https://www.flickr.com/photos/72098626@N00",
+            "license": "by-nc-sa",
+            "license_version": "2.0",
+            "license_url": "https://creativecommons.org/licenses/by-nc-sa/2.0/",
+            "provider": "flickr",
+            "source": "flickr",
+            "category": null,
+            "filesize": null,
+            "filetype": null,
+            "tags": [
+                {
+                    "name": "broadway",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "bus",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "cloudslightningstorms",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "manhattan",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "newyork",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "rain",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "umbrella",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "umbrellas",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "upperwestside",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "window",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                }
+            ],
+            "attribution": "\"Umbrellas in the rain, Jun 2009 - 31\" by Ed Yourdon is licensed under CC BY-NC-SA 2.0. To view a copy of this license, visit https://creativecommons.org/licenses/by-nc-sa/2.0/.",
+            "fields_matched": [
+                "description",
+                "title",
+                "tags.name"
+            ],
+            "mature": false,
+            "height": 768,
+            "width": 1024,
+            "thumbnail": "https://api.openverse.org/v1/images/9da92ba9-2558-46e0-89d4-aca160f54f7e/thumb/",
+            "detail_url": "https://api.openverse.org/v1/images/9da92ba9-2558-46e0-89d4-aca160f54f7e/",
+            "related_url": "https://api.openverse.org/v1/images/9da92ba9-2558-46e0-89d4-aca160f54f7e/related/",
+            "unstable__sensitivity": []
+        },
+        {
+            "id": "9f2352b5-ad7c-40a2-a633-1973e15d0353",
+            "title": "Biking in the rain, par Franck Vervial",
+            "indexed_on": "2018-11-08T17:31:32.467511Z",
+            "foreign_landing_url": "https://www.flickr.com/photos/44003246@N03/5432030306",
+            "url": "https://live.staticflickr.com/4109/5432030306_41a733199e_b.jpg",
+            "creator": "Franck Vervial",
+            "creator_url": "https://www.flickr.com/photos/44003246@N03",
+            "license": "by-nc-nd",
+            "license_version": "2.0",
+            "license_url": "https://creativecommons.org/licenses/by-nc-nd/2.0/",
+            "provider": "flickr",
+            "source": "flickr",
+            "category": null,
+            "filesize": null,
+            "filetype": null,
+            "tags": [
+                {
+                    "name": "bicycle",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "bike",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "blackwhite",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "ladigue",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "people",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "rain",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "seychelles",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "street",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "umbrella",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                }
+            ],
+            "attribution": "\"Biking in the rain, par Franck Vervial\" by Franck Vervial is licensed under CC BY-NC-ND 2.0. To view a copy of this license, visit https://creativecommons.org/licenses/by-nc-nd/2.0/.",
+            "fields_matched": [
+                "description",
+                "title",
+                "tags.name"
+            ],
+            "mature": false,
+            "height": 785,
+            "width": 1024,
+            "thumbnail": "https://api.openverse.org/v1/images/9f2352b5-ad7c-40a2-a633-1973e15d0353/thumb/",
+            "detail_url": "https://api.openverse.org/v1/images/9f2352b5-ad7c-40a2-a633-1973e15d0353/",
+            "related_url": "https://api.openverse.org/v1/images/9f2352b5-ad7c-40a2-a633-1973e15d0353/related/",
+            "unstable__sensitivity": []
+        },
+        {
+            "id": "74c5b24a-43fb-4c72-bfd5-32677040f530",
+            "title": "umbrella girl",
+            "indexed_on": "2020-04-22T22:46:34.348946Z",
+            "foreign_landing_url": "https://www.flickr.com/photos/16493883@N00/5132818027",
+            "url": "https://live.staticflickr.com/4051/5132818027_dbef0c7b5d_b.jpg",
+            "creator": "sekihan",
+            "creator_url": "https://www.flickr.com/photos/16493883@N00",
+            "license": "by-nc",
+            "license_version": "2.0",
+            "license_url": "https://creativecommons.org/licenses/by-nc/2.0/",
+            "provider": "flickr",
+            "source": "flickr",
+            "category": null,
+            "filesize": null,
+            "filetype": null,
+            "tags": [
+                {
+                    "name": "girl",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "rain",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "street",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                },
+                {
+                    "name": "umbrella",
+                    "accuracy": null,
+                    "unstable__provider": "flickr"
+                }
+            ],
+            "attribution": "\"umbrella girl\" by sekihan is licensed under CC BY-NC 2.0. To view a copy of this license, visit https://creativecommons.org/licenses/by-nc/2.0/.",
+            "fields_matched": [
+                "title",
+                "tags.name"
+            ],
+            "mature": false,
+            "height": 1024,
+            "width": 1024,
+            "thumbnail": "https://api.openverse.org/v1/images/74c5b24a-43fb-4c72-bfd5-32677040f530/thumb/",
+            "detail_url": "https://api.openverse.org/v1/images/74c5b24a-43fb-4c72-bfd5-32677040f530/",
+            "related_url": "https://api.openverse.org/v1/images/74c5b24a-43fb-4c72-bfd5-32677040f530/related/",
+            "unstable__sensitivity": []
+        }
+    ]
+}

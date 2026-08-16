@@ -69,22 +69,37 @@
                         </button>
                     @endif
 
-                    {{-- Front --}}
+                    {{-- Front.
+
+                         The revealed sentence is always the tappable one, and the
+                         hidden one never is: tapping a word while the blank is
+                         still on screen would read the answer out loud. --}}
                     @if ($card->type === CardType::Cloze)
                         <p class="text-2xl sm:text-3xl leading-snug text-gray-900 dark:text-gray-100">
                             <span x-show="!revealed">{{ $note->clozePrompt() }}</span>
-                            <span x-show="revealed" x-cloak>{{ $note->sentence }}</span>
+                            <span x-show="revealed" x-cloak>
+                                <x-spoken-sentence :sentence="$note->sentence"
+                                                   :language="$deck->target_language"
+                                                   :timings="$note->word_timings"
+                                                   :audio-url="$note->audioSentenceSrc()" />
+                            </span>
                         </p>
                     @elseif ($card->type === CardType::Listening)
                         <p class="text-2xl sm:text-3xl leading-snug text-gray-900 dark:text-gray-100"
                            x-show="revealed" x-cloak>
-                            {{ $note->sentence }}
+                            <x-spoken-sentence :sentence="$note->sentence"
+                                               :language="$deck->target_language"
+                                               :timings="$note->word_timings"
+                                               :audio-url="$note->audioSentenceSrc()" />
                         </p>
                     @else
                         <p class="text-lg text-gray-600 dark:text-gray-300">{{ $note->meaning }}</p>
                         <p class="text-2xl sm:text-3xl leading-snug text-gray-900 dark:text-gray-100"
                            x-show="revealed" x-cloak>
-                            {{ $note->sentence }}
+                            <x-spoken-sentence :sentence="$note->sentence"
+                                               :language="$deck->target_language"
+                                               :timings="$note->word_timings"
+                                               :audio-url="$note->audioSentenceSrc()" />
                         </p>
                     @endif
 
@@ -132,14 +147,19 @@
                         <button type="submit"
                                 class="w-full py-4 rounded-md text-white font-semibold {{ $gradeClasses($grade) }} focus:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 dark:focus-visible:ring-offset-gray-900 transition">
                             <span class="block text-sm sm:text-base">{{ $grade->label() }}</span>
-                            <span class="block text-[10px] opacity-70 tabular-nums">{{ $grade->value }}</span>
+                            {{-- What this button would actually do. Hard and Good are a
+                                 choice between two futures, and choosing blind is how a
+                                 card ends up months out from a mis-tap. --}}
+                            <span class="block text-[11px] opacity-80 tabular-nums">
+                                {{ $previews[$grade->value] ?? $grade->value }}
+                            </span>
                         </button>
                     </form>
                 @endforeach
             </div>
 
             <p class="text-center text-xs text-gray-400 dark:text-gray-500" x-show="revealed" x-cloak>
-                {{ __('Keys 1–4 to grade, space to reveal') }}
+                {{ __('Tap any word to hear it · keys 1–4 to grade, space to reveal') }}
             </p>
 
         </div>
