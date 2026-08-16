@@ -46,11 +46,24 @@ services:
       - key: DB_CONNECTION
         value: pgsql
 
-      # DB_URL, not DATABASE_URL: config/database.php reads env('DB_URL'), and
-      # the other name is silently ignored — Laravel would fall back to
-      # DB_HOST/DB_DATABASE, which are not set, and fail on the first query.
-      - key: DB_URL
+      # Set as discrete values rather than a DB_URL, because a password lives
+      # in the middle of a URI and any @ : / ? # in it has to be percent-encoded
+      # there. Encoded wrong, the URI parses into a different host and fails
+      # with an error about the wrong thing entirely. These fields have no such
+      # trap. (If a URL is ever wanted instead, the key is DB_URL — not
+      # DATABASE_URL, which config/database.php ignores.)
+      - key: DB_HOST
+        sync: false        # the pooler host, ending in .pooler.supabase.com
+      - key: DB_PORT
+        value: 5432
+      - key: DB_DATABASE
+        value: postgres
+      - key: DB_USERNAME
+        sync: false        # postgres.<project-ref>, not plain postgres
+      - key: DB_PASSWORD
         sync: false
+      - key: DB_SSLMODE
+        value: require
 
       # ------------------------------------------------------------- queue
       # A database queue, not Redis: it needs no extra service, and it means a
@@ -92,7 +105,29 @@ services:
         value: true
 
       # -------------------------------------------------------------- apis
-      # One key for sentences and speech both.
+      # Cloudflare Workers AI reads the cards aloud and works out where each
+      # word falls inside the clip. Its REST endpoint needs no Worker deployed.
+      #
+      # It is the primary voice on measurements, not preference: one second
+      # against Gemini's six, an MP3 already encoded rather than raw PCM that
+      # needs a WAV header and ffmpeg, and about 140 notes a day inside the free
+      # tier against a Gemini limit that one afternoon of testing exhausted.
+      #
+      # A token needs Workers AI Read and Workers AI Edit. No card required.
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
+
+      # One of twelve Aura voices. Chosen once: a learner should hear the same
+      # voice every day, and it is part of the storage key for per-word clips,
+      # so changing it later leaves the old ones behind.
+      - key: CLOUDFLARE_TTS_VOICE
+        value: angus
+
+      # Gemini writes the sentences, and stays behind Cloudflare as the second
+      # voice — the two are metered on unrelated counters, so the pair keeps
+      # working through an afternoon either one has a bad day.
       - key: GEMINI_API_KEY
         sync: false
       - key: PIXABAY_API_KEY
@@ -100,7 +135,22 @@ services:
       - key: UNSPLASH_ACCESS_KEY
         sync: false
 
-      # ffmpeg is in the image, so this is worth having on: it takes each clip
-      # from about 230 KB to about 20 KB against a 1 GB free bucket.
+      # ffmpeg is in the image, so this is worth having on: it takes a Gemini
+      # WAV from about 230 KB to about 20 KB against a 1 GB free bucket.
+      # Cloudflare already answers in MP3 and passes through untouched.
       - key: FLASHAI_COMPRESS_AUDIO
         value: true
+
+      # ---------------------------------------------------------- sessions
+      # Anki's learn-ahead limit. Without it, answering "Hard" on a card being
+      # drilled parks it ten minutes out and the session says there is nothing
+      # left to study — which is true and is not what it means.
+      - key: FLASHAI_LEARN_AHEAD_MINUTES
+        value: 20
+
+      # ------------------------------------------------------ diagnostics
+      # Who may open /system, which calls the real services on a button press.
+      # Left empty it falls back to the account that registered first, so this
+      # only needs setting if somebody else should reach it too.
+      - key: FLASHAI_DIAGNOSTICS_EMAILS
+        sync: false
